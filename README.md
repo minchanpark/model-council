@@ -1,6 +1,6 @@
 # newdawn-plugins
 
-NewDawn 팀 공용 Claude 플러그인 마켓플레이스.
+Claude 플러그인 마켓플레이스.
 
 ## 설치 (팀원용, 1회)
 
