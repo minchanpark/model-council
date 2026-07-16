@@ -1,15 +1,29 @@
 {
   "name": "newdawn-plugins",
-  "owner": { "name": "NewDawn", "email": "itisnewdawn@gmail.com" },
-  "metadata": { "description": "NewDawn 팀 공용 Claude 플러그인 마켓플레이스", "version": "1.0.0" },
+  "owner": {
+    "name": "NewDawn",
+    "email": "itisnewdawn@gmail.com"
+  },
+  "metadata": {
+    "description": "NewDawn 팀 공용 Claude 플러그인 마켓플레이스",
+    "version": "1.0.0"
+  },
   "plugins": [
     {
       "name": "model-council",
-      "source": "./plugins/model-council",
+      "source": "./",
       "description": "멀티모델 리서치·개발 오케스트레이터 — 메인 오케스트레이터가 계획을 수립·토론하고 서브 에이전트들(Codex·Claude 코더/리서처)에게 병렬 작업을 지휘한 뒤, 초기 기획 기준으로 심사·통합해 최종 결과를 만든다.",
       "version": "0.3.0",
-      "author": { "name": "NewDawn" },
-      "keywords": ["orchestrator", "multi-model", "research", "codex", "opus"]
+      "author": {
+        "name": "NewDawn"
+      },
+      "keywords": [
+        "orchestrator",
+        "multi-model",
+        "research",
+        "codex",
+        "opus"
+      ]
     }
   ]
 }

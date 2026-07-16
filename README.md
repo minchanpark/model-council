@@ -1,4 +1,8 @@
-# newdawn-plugins
+# model-council
+
+멀티모델 리서치·개발 오케스트레이터 플러그인 — 메인 오케스트레이터(호스트의 Claude)가 계획을 수립·토론하고, Codex(ChatGPT OAuth)·Claude Opus 등 서브 에이전트들에게 병렬 리서치/구현을 지휘한 뒤, 초기 기획 기준으로 심사·통합합니다. API 키 불필요(전부 구독 OAuth). 스킬: `/orchestrate`(리서치) · `/build`(개발) · `/council-setup`(프로바이더 설정).
+
+상세 문서: [PLUGIN.md](./PLUGIN.md) · 이 레포는 플러그인(루트)이자 팀 마켓플레이스(newdawn-plugins)입니다.
 
 Claude 플러그인 마켓플레이스.
 
