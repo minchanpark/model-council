@@ -58,8 +58,9 @@ description: >-
   "providers": {
     "claude": { "type": "native", "enabled": true, "write": true,
                 "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
-                "capabilities": { "per_call_model": true, "per_call_effort": false },
-                "effort_ladder": ["low", "medium", "high", "xhigh", "max"] },
+                "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
+                "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
+                "effort_ladder": ["low", "medium", "high", "xhigh"] },
     "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
                 "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                 "tools": { "call": "codex", "reply": "codex-reply" },
@@ -78,8 +79,8 @@ description: >-
 }
 ```
 
-새 프로바이더를 추가할 때는 known-providers.md의 항목(또는 사용자 정의 값)으로 `tools`·`arg_map`·`capabilities`·`effort_ladder`·`write`·`split`을 채운다. `model`과 `model_allowlist`는 사용자나 도구가 확인한 값만 기록하고, 확인되지 않았으면 각각 `null`, `[]`로 둔다. `routing.tier_map`에 열이 없으면 effort_ladder를 네 구간(fast→maximum)에 균등 매핑한 기본값을 제안해 추가한다. Claude native의 `per_call_effort`는 실제 호출 인터페이스가 생기기 전까지 `false`로 유지한다.
+새 프로바이더를 추가할 때는 known-providers.md의 항목(또는 사용자 정의 값)으로 `tools`·`arg_map`·`capabilities`·`effort_ladder`·`write`·`split`을 채운다. `model`과 `model_allowlist`는 사용자나 도구가 확인한 값만 기록하고, 확인되지 않았으면 각각 `null`, `[]`로 둔다. `routing.tier_map`에 열이 없으면 effort_ladder를 네 구간(fast→maximum)에 균등 매핑한 기본값을 제안해 추가한다. Claude native는 `per_call_effort: false`, `profile_effort: true`로 기록하고 `{role}-claude-{tier}` 프로필을 선택한다.
 
 ## 6. 마무리 요약
 
-최종 상태 표(프로바이더 | enabled | 역할: 리서치/코딩 | 기본 모델 | 호출별 model/effort 지원 | effort 사다리)와 함께: "이제 `/orchestrate` 또는 `/build`에서 이 편성이 사용됩니다. 프로바이더를 더 붙이려면 연결 후 `/council-setup`을 재실행하세요."
+최종 상태 표(프로바이더 | enabled | 역할: 리서치/코딩 | 기본 모델 | effort 방식: 호출/프로필/상속 | effort 사다리)와 함께: "이제 `/orchestrate` 또는 `/build`에서 이 편성이 사용됩니다. 프로바이더를 더 붙이려면 연결 후 `/council-setup`을 재실행하세요."

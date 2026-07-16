@@ -3,7 +3,7 @@ name: orchestrate
 description: >-
   멀티모델 리서치 오케스트레이션을 수행한다. 사용자가 "오케스트레이트", "orchestrate", "멀티모델 리서치",
   "council", "카운슬", "교차 검증해서 조사", "Codex랑 Claude한테 시켜", "여러 모델로 리서치" 등을 요청하면 트리거된다.
-  메인 모델이 리서치 계획을 수립하고, researcher-codex(Codex)와 researcher-claude(Claude)에게
+  메인 모델이 리서치 계획을 수립하고, researcher-codex(Codex)와 researcher-claude-* 프로필(Claude)에게
   병렬 리서치를 분배한 뒤, 초기 계획 기준으로 심사·통합해 최종 답변을 생성한다.
 ---
 
@@ -20,8 +20,9 @@ description: >-
   "providers": {
     "claude": { "type": "native", "enabled": true, "write": true,
                 "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
-                "capabilities": { "per_call_model": true, "per_call_effort": false },
-                "effort_ladder": ["low", "medium", "high", "xhigh", "max"] },
+                "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
+                "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
+                "effort_ladder": ["low", "medium", "high", "xhigh"] },
     "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
                 "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                 "tools": { "call": "codex", "reply": "codex-reply" },
@@ -56,7 +57,7 @@ description: >-
 1. 우선순위는 `인라인 요청 > 작업별 명시값 > model_policy와 model_allowlist에 따른 오케스트레이터 선택 > providers.<name>.model > inherit/default`다. `fixed`는 기본 모델을 고정하고, `inherit`는 호출 인자를 생략하며, `orchestrator`는 역할·난이도에 맞춰 허용 모델 중 고른다.
 2. 모델 ID·별칭은 `model_allowlist`에 있거나 사용자가 제공했거나 현재 호스트·도구에서 확인된 값만 사용한다. 오케스트레이터가 최신 모델명을 추측해 만들지 않는다. 허용 후보가 없거나 검증할 수 없으면 `inherit` 또는 기본값으로 폴백한다.
 3. effort가 대상 모델에서 지원되지 않으면 같은 프로바이더 사다리의 한 단계 낮은 값으로 폴백한다. 안전한 값이 없으면 effort 인자를 생략한다. 특정 모델 전용 effort(예: 일부 Codex의 `ultra`)와 오케스트레이션 프리셋(예: `ultracode`)을 서로 또는 다른 프로바이더 effort와 동일시하지 않는다.
-4. Claude native Agent는 모델을 호출별로 지정할 수 있지만 effort 호출 인자가 없다. 따라서 `CLAUDE EFFORT INTENT`는 작업 범위를 안내하고 실제 런타임 effort는 호스트 세션·에이전트 설정을 상속한다. Codex는 `config.model_reasoning_effort`로 호출별 전달한다.
+4. Claude native Agent는 모델을 호출별로 지정할 수 있지만 effort 호출 인자는 없다. Claude effort는 `{role}-claude-{tier}` 프로필의 frontmatter(`low`/`medium`/`high`/`xhigh`)로 실제 설정한다. frontmatter는 세션 effort를 덮어쓰지만 `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 있으면 환경변수가 우선한다. Codex는 `config.model_reasoning_effort`로 호출별 전달한다.
 5. 계획표와 최종 보고에 `requested → resolved/actual`을 구분한다. 적용할 수 없는 값을 적용했다고 주장하지 않는다.
 
 오케스트레이터 본인도 PLAN·REVIEW·SYNTHESIZE 단계에서 깊이 검토한다. 메인 모델·effort는 플러그인이 바꾸지 않고 호스트 앱의 선택을 따른다.
@@ -79,7 +80,7 @@ description: >-
 
 **모든 트랙의 모든 리서처 Agent 호출을 하나의 메시지에서 동시에 실행한다** (순차 금지. 호스트가 이 도구를 `Task`로 표시하면 해당 별칭 사용):
 
-- claude(native): `Agent(subagent_type: "researcher-claude")`. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. native Agent는 호출별 effort를 받지 않는다.
+- claude(native): reasoning tier에 맞춰 `Agent(subagent_type: "researcher-claude-{tier}")`를 선택한다. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. 프로필은 `fast=low`, `balanced=medium`, `deep=high`, `maximum=xhigh` effort를 frontmatter로 설정한다.
 - codex: `Agent(subagent_type: "researcher-codex")` — 분할 호출 최적화 내장
 - 기타 MCP 프로바이더: `Agent(subagent_type: "researcher-proxy")` — 브리프 끝에 `[PROVIDER SPEC]` 블록(레지스트리 항목의 tools·arg_map·capabilities·split)을 그대로 포함시킨다
 
@@ -94,7 +95,7 @@ REASONING TIER: {fast|balanced|deep|maximum}
 CODEX MODEL: {model 또는 "default"}            ← codex 브리프에만
 CODEX EFFORT: {resolved effort 또는 "default"} ← codex 브리프에만
 EFFORT: {resolved effort 또는 "default"}       ← proxy 브리프에만
-CLAUDE EFFORT INTENT: {requested effort}        ← claude 브리프에만(실제값은 inherit)
+CLAUDE PROFILE: researcher-claude-{tier} ({resolved effort}) ← claude 브리프에만
 
 ## 목표
 {전체 목표 한 문장 + 이 트랙의 역할}

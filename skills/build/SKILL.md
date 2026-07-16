@@ -54,7 +54,7 @@ description: >-
 
 독립 패키지들은 **하나의 메시지에서 Agent 도구로 동시에** 디스패치한다(호스트가 이 도구를 `Task`로 표시하면 해당 별칭 사용):
 
-- Claude 코더: `Agent(subagent_type: "coder-claude")`. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. effort는 호스트 설정을 상속한다.
+- Claude 코더: `Agent(subagent_type: "coder-claude-{tier}")`. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. 선택한 프로필의 frontmatter가 tier별 effort를 설정한다.
 - Codex 코더: `Agent(subagent_type: "coder-codex")` — `providers.codex.write: false`면 배정 금지(리뷰만).
 - 기타 프로바이더 코더: `Agent(subagent_type: "coder-proxy")` — `write: true`인 프로바이더만, 브리프 끝에 `[PROVIDER SPEC]` 블록 포함.
 
@@ -64,7 +64,7 @@ description: >-
 [WORK PACKAGE]
 MODEL: {resolved model 또는 inherit/default}
 REASONING TIER: {fast|balanced|deep|maximum}
-CLAUDE EFFORT INTENT: {claude 요청값; 실제값은 inherit} | CODEX EFFORT: {codex resolved 값} | CODEX MODEL: {지정 시}
+CLAUDE PROFILE: coder-claude-{tier} ({resolved effort}) | CODEX EFFORT: {codex resolved 값} | CODEX MODEL: {지정 시}
 PROJECT DIR: {절대경로}
 
 ## 패키지 목표
@@ -79,9 +79,9 @@ PROJECT DIR: {절대경로}
 
 ## 4. CROSS-REVIEW — 교차 리뷰와 통합
 
-1. **교차 원칙**: Claude 코더의 diff는 Codex가, Codex 코더의 diff는 Claude(reviewer-claude)가 리뷰한다. 자기 결과물을 자기가 리뷰하지 않는다.
+1. **교차 원칙**: Claude 코더의 diff는 Codex가, Codex 코더의 diff는 Claude `reviewer-claude-{tier}` 프로필이 리뷰한다. 자기 결과물을 자기가 리뷰하지 않는다.
    - Codex 리뷰: `codex` 도구 직접 호출, diff 전문을 prompt에 포함, `sandbox: "read-only"`, effort는 패키지 난이도에서 해석한 resolved Codex effort. 요청: "Review this diff: bugs, edge cases, security, spec violations. Verdict: APPROVE or REJECT with reasons."
-   - Claude 리뷰: `Agent(subagent_type: "reviewer-claude")`, diff와 명세 전달. resolved model이 `inherit`이 아니면 model 인자도 전달한다.
+   - Claude 리뷰: `Agent(subagent_type: "reviewer-claude-{tier}")`, diff와 명세 전달. 패키지 tier와 같은 프로필을 기본으로 하되 critical 통합 검토는 `maximum`을 쓴다. resolved model이 `inherit`이 아니면 model 인자도 전달한다.
 2. **판정**: REJECT는 해당 코더에게 리뷰 코멘트와 함께 수정 지시(`SendMessage`로 이어가기). 최대 `max_fix_iterations`회. 리뷰어 간 충돌 시 오케스트레이터가 근거로 판정한다.
 3. **통합 검증**: 전 패키지 승인 후 오케스트레이터가 전체 빌드·테스트를 실행(가능한 환경이면)하고 결과를 확인한다.
 4. **최종 보고**: 변경 요약, 패키지별 코더·리뷰 이력, 토론에서 결정된 사항 반영 여부, 남은 TODO. 모델·effort는 requested→resolved/actual을 구분한다. 마지막 줄: `council-build: plan({provider} {model}, {requested→actual effort}, {N}라운드) | coders: {목록} | reviews: {승인/반려 수} | fixes: {수}`.

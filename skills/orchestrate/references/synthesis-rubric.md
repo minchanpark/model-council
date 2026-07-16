@@ -41,7 +41,7 @@
 - ...
 
 ---
-council: codex({model}, {requested→actual effort}) + claude({model}, {requested→inherited effort}) | followups: N회
+council: codex({model}, {requested→actual effort}) + claude({model}, {tier→profile effort}) | followups: N회
 ```
 
 ## 4. critique 모드 통합 템플릿

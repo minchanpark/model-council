@@ -5,9 +5,10 @@
 ## claude (native) — 항상 사용 가능
 - 연결: 없음 (호스트의 Claude 구독. Agent 도구로 스폰)
 - 모델: 기본 `inherit`. 확인된 Claude 모델 별칭·ID는 호출별 model로 지정 가능
-- effort_ladder: low/medium/high/xhigh/max. 단, native Agent 도구는 호출별 effort 인자를 받지 않으므로 실제 effort는 호스트 세션·에이전트 설정을 상속
-- capabilities: `per_call_model: true`, `per_call_effort: false`
-- write: true (coder-claude)
+- effort: Agent 호출 인자는 없지만 역할별 프로필의 frontmatter로 제어. fast=low / balanced=medium / deep=high / maximum=xhigh
+- capabilities: `per_call_model: true`, `per_call_effort: false`, `profile_effort: true`
+- agent_template: `{role}-claude-{tier}`. `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 있으면 프로필 effort보다 우선
+- write: true (coder-claude-* 프로필)
 
 ## codex (OpenAI) — 플러그인 동봉
 - 감지 패턴: 도구 이름에 `codex`

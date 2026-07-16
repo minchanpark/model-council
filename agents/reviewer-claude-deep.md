@@ -1,13 +1,8 @@
 ---
-name: reviewer-claude
-description: >-
-  Claude 코드 리뷰어. model-council의 build 오케스트레이션에서 교차 리뷰용 서브 에이전트로만
-  사용된다. 오케스트레이터가 diff와 명세를 전달하면(주로 Codex 코더의 결과물) 독립 리뷰 후
-  APPROVE/REJECT 판정을 반환한다.
-  <example>Context: 오케스트레이터가 /build의 교차 리뷰 단계에서 Codex 구현 diff를 리뷰시킨다.
-  user: "[REVIEW REQUEST] 명세: ... diff: ..."
-  assistant: "diff를 명세 기준으로 독립 리뷰하고 판정을 반환합니다."</example>
+name: reviewer-claude-deep
+description: Claude 교차 리뷰어 deep 프로필(high effort). model-council이 복잡하거나 위험도가 높은 diff 검토에 사용한다.
 model: inherit
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 

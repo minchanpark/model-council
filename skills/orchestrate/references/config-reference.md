@@ -10,8 +10,9 @@
     "claude": {
       "type": "native", "enabled": true, "write": true,
       "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
-      "capabilities": { "per_call_model": true, "per_call_effort": false },
-      "effort_ladder": ["low", "medium", "high", "xhigh", "max"]
+      "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
+      "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
+      "effort_ladder": ["low", "medium", "high", "xhigh"]
     },
     "codex": {
       "type": "mcp", "enabled": true, "write": true, "split": true,
@@ -96,11 +97,11 @@
 
 | 프로바이더 | 호출별 model | 호출별 effort | 보고 방식 |
 |---|---:|---:|---|
-| Claude native Agent | 가능 | 불가 | model은 resolved 값, effort는 `requested → inherited`로 표시 |
+| Claude native Agent | 가능 | 직접 인자는 불가, 프로필 선택은 가능 | model은 resolved 값, effort는 `tier → profile`로 표시 |
 | Codex MCP | 가능 | 가능 | model·effort 모두 `requested → actual`로 표시 |
 | 기타 MCP | `capabilities`·`arg_map`에 따름 | `capabilities`·`arg_map`에 따름 | 미지원 값은 `default/inherited`로 표시 |
 
-Claude native Agent는 호출별 effort 인자를 제공하지 않는다. 따라서 `CLAUDE EFFORT INTENT`는 작업의 검토 범위를 안내할 뿐이며 실제 런타임 effort는 호스트 세션·에이전트 설정을 상속한다. 완전한 호출별 제어가 필요하면 Agent SDK 기반 어댑터가 별도로 필요하다.
+Claude native Agent는 호출별 effort 인자를 제공하지 않지만 서브에이전트 frontmatter의 `effort`는 해당 에이전트가 실행될 때 세션 effort를 덮어쓴다. 이 플러그인은 역할마다 `fast(low)`, `balanced(medium)`, `deep(high)`, `maximum(xhigh)` 프로필을 제공하고 오케스트레이터가 tier에 맞는 `agent_template`을 선택한다. 단, `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 설정되어 있으면 환경변수가 frontmatter보다 우선한다. 프로필에 없는 `max` 요청은 `maximum(xhigh)`으로 폴백하며, 완전한 임의값 호출 제어가 필요할 때만 Agent SDK 어댑터가 필요하다.
 
 ## providers 필드
 
@@ -113,8 +114,11 @@ Claude native Agent는 호출별 effort 인자를 제공하지 않는다. 따라
 | `model_policy` | `orchestrator`, `fixed`, `inherit` |
 | `model` | 기본 모델. Claude의 `inherit`, MCP의 null은 호출 인자 생략 |
 | `model_allowlist` | 오케스트레이터가 고를 수 있는 검증된 모델 후보 |
+| `effort_mode` | `profile`, `per_call`, `inherit` 중 effort 적용 방식 |
+| `agent_template` | 프로필 방식의 에이전트 이름 규칙. 기본 `{role}-claude-{tier}` |
 | `capabilities.per_call_model` | 호출 도구가 model 인자를 받을 수 있는지 |
 | `capabilities.per_call_effort` | 호출 도구가 effort 인자를 받을 수 있는지 |
+| `capabilities.profile_effort` | effort별 에이전트 프로필을 선택할 수 있는지 |
 | `tools.call` / `tools.reply` | MCP 호출 도구와 스레드 이어가기 도구 |
 | `arg_map` | 모델·effort를 전달할 프로바이더별 인자 경로 |
 | `effort_ladder` | 낮음→높음 순의 허용·폴백 어휘 |
@@ -135,6 +139,7 @@ Claude native Agent는 호출별 effort 인자를 제공하지 않는다. 따라
 
 - "Codex는 기본 모델, reasoning tier는 balanced" → model 인자 생략, tier를 Codex effort로 해석
 - "Claude 서브 모델은 sonnet으로" → 확인 가능한 별칭이면 native Agent 호출에 전달
+- "Claude reasoning tier는 maximum" → 역할에 맞는 `*-claude-maximum` 프로필(xhigh)을 선택
 - "이번 계획 토론만 Codex xhigh" → build plan의 resolved effort만 xhigh
 - "이번엔 Gemini 빼고" → 해당 실행에서 Gemini 제외
 
