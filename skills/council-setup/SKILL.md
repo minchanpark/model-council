@@ -28,6 +28,7 @@ description: >-
 - **연결된 프로바이더 중 무엇을 활성화할지** (복수 선택. Cowork에서는 선택지 UI, Claude Code에서는 텍스트로)
 - **미연결 프로바이더 중 연결 안내를 원하는 것**이 있는지 — 반드시 미연결 목록도 보여줘서 "이런 것도 붙일 수 있다"를 알린다
 - 활성화 대상의 **쓰기 권한**(build에서 코더로 쓸지, 리서치 전용일지)
+- 프로바이더별 **기본 모델**(`inherit`/`null` 권장)과, 확인된 경우에만 사용할 모델 별칭·ID
 
 기본 권장: claude + codex 활성화, 나머지는 사용자 선택.
 
@@ -56,16 +57,30 @@ description: >-
 {
   "providers": {
     "claude": { "type": "native", "enabled": true, "write": true,
-                "effort_ladder": ["normal", "deep", "extra", "max"] },
-    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true, "model": null,
+                "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
+                "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
+                "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
+                "effort_ladder": ["low", "medium", "high", "xhigh"] },
+    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
+                "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                 "tools": { "call": "codex", "reply": "codex-reply" },
-                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "ultra"] }
+                "capabilities": { "per_call_model": true, "per_call_effort": true },
+                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] }
+  },
+  "routing": {
+    "default_tier": "deep",
+    "tier_map": {
+      "fast":     { "claude": "low",    "codex": "low" },
+      "balanced": { "claude": "medium", "codex": "medium" },
+      "deep":     { "claude": "high",   "codex": "high" },
+      "maximum":  { "claude": "xhigh",  "codex": "xhigh" }
+    }
   }
 }
 ```
 
-새 프로바이더를 추가할 때는 known-providers.md의 항목(또는 사용자 정의 값)으로 `tools`·`arg_map`·`effort_ladder`·`write`·`split`을 채운다. 난이도 매트릭스에 새 프로바이더 열이 없으면 effort_ladder를 4구간(easy→critical)에 균등 매핑한 기본값을 제안해 추가한다.
+새 프로바이더를 추가할 때는 known-providers.md의 항목(또는 사용자 정의 값)으로 `tools`·`arg_map`·`capabilities`·`effort_ladder`·`write`·`split`을 채운다. `model`과 `model_allowlist`는 사용자나 도구가 확인한 값만 기록하고, 확인되지 않았으면 각각 `null`, `[]`로 둔다. `routing.tier_map`에 열이 없으면 effort_ladder를 네 구간(fast→maximum)에 균등 매핑한 기본값을 제안해 추가한다. Claude native는 `per_call_effort: false`, `profile_effort: true`로 기록하고 `{role}-claude-{tier}` 프로필을 선택한다.
 
 ## 6. 마무리 요약
 
-최종 상태 표(프로바이더 | enabled | 역할: 리서치/코딩 | effort 사다리)와 함께: "이제 `/orchestrate` 또는 `/build`에서 이 편성이 사용됩니다. 프로바이더를 더 붙이려면 연결 후 `/council-setup`을 재실행하세요."
+최종 상태 표(프로바이더 | enabled | 역할: 리서치/코딩 | 기본 모델 | effort 방식: 호출/프로필/상속 | effort 사다리)와 함께: "이제 `/orchestrate` 또는 `/build`에서 이 편성이 사용됩니다. 프로바이더를 더 붙이려면 연결 후 `/council-setup`을 재실행하세요."
