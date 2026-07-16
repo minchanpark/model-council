@@ -2,8 +2,8 @@
 name: orchestrate
 description: >-
   멀티모델 리서치 오케스트레이션을 수행한다. 사용자가 "오케스트레이트", "orchestrate", "멀티모델 리서치",
-  "council", "카운슬", "교차 검증해서 조사", "Codex랑 Opus한테 시켜", "여러 모델로 리서치" 등을 요청하면 트리거된다.
-  메인 모델이 리서치 계획을 수립하고, researcher-codex(Codex)와 researcher-opus(Claude Opus)에게
+  "council", "카운슬", "교차 검증해서 조사", "Codex랑 Claude한테 시켜", "여러 모델로 리서치" 등을 요청하면 트리거된다.
+  메인 모델이 리서치 계획을 수립하고, researcher-codex(Codex)와 researcher-claude(Claude)에게
   병렬 리서치를 분배한 뒤, 초기 계획 기준으로 심사·통합해 최종 답변을 생성한다.
 ---
 
@@ -19,19 +19,29 @@ description: >-
 {
   "providers": {
     "claude": { "type": "native", "enabled": true, "write": true,
-                "effort_ladder": ["normal", "deep", "extra", "max"] },
-    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true, "model": null,
+                "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
+                "capabilities": { "per_call_model": true, "per_call_effort": false },
+                "effort_ladder": ["low", "medium", "high", "xhigh", "max"] },
+    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
+                "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                 "tools": { "call": "codex", "reply": "codex-reply" },
-                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "ultra"] }
+                "capabilities": { "per_call_model": true, "per_call_effort": true },
+                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] }
+  },
+  "routing": {
+    "default_tier": "deep",
+    "tier_map": {
+      "fast":     { "claude": "low",    "codex": "low" },
+      "balanced": { "claude": "medium", "codex": "medium" },
+      "deep":     { "claude": "high",   "codex": "high" },
+      "maximum":  { "claude": "xhigh",  "codex": "xhigh" }
+    }
   },
   "research": {
     "max_tracks": 4,
     "dual_from": "hard",
-    "difficulty_matrix": {
-      "easy":     { "claude": "normal", "codex": "medium" },
-      "medium":   { "claude": "deep",   "codex": "high" },
-      "hard":     { "claude": "extra",  "codex": "xhigh" },
-      "critical": { "claude": "max",    "codex": "ultra" }
+    "difficulty_tiers": {
+      "easy": "fast", "medium": "balanced", "hard": "deep", "critical": "maximum"
     }
   },
   "max_followups": 1,
@@ -39,9 +49,17 @@ description: >-
 }
 ```
 
-**프로바이더 규칙**: 편성 후보는 `providers`에서 `enabled: true`인 것 전부다. 매트릭스의 값은 해당 프로바이더의 effort(프로바이더별 `effort_ladder` 어휘를 그대로 사용, claude는 thinking 깊이). 매트릭스에 열이 없는 프로바이더는 effort_ladder를 4구간에 균등 매핑해 쓴다. 프로바이더 추가·변경은 `/council-setup`으로 안내한다. config가 아예 없으면 위 기본값(claude+codex)을 쓰되 첫 실행 시 "/council-setup으로 프로바이더를 설정할 수 있다"고 한 줄 알린다. 구 형식 config(최상위 `codex`/`claude`, `claude_thinking`/`codex_effort` 키)를 만나면 동일 의미로 해석한다.
+**프로바이더 규칙**: 편성 후보는 `providers`에서 `enabled: true`인 것 전부다. 오케스트레이터는 먼저 난이도를 공통 `reasoning tier`(`fast`/`balanced`/`deep`/`maximum`)로 정하고, `routing.tier_map`에서 프로바이더별 effort로 해석한다. 새 프로바이더의 명시적 매핑이 없으면 `effort_ladder`를 네 구간에 균등 매핑한다. config가 없으면 위 기본값을 쓰되 첫 실행 시 "/council-setup으로 프로바이더를 설정할 수 있다"고 한 줄 알린다. 구 형식 config의 `difficulty_matrix`와 최상위 `codex`/`claude`, `claude_thinking`/`codex_effort` 키는 동일 의미로 해석한다.
 
-기본 철학: 서브 에이전트 effort는 **최대 단계 바로 아래**가 기준선 — 트랙 난이도에 따라 매트릭스로 가감한다. **Claude 서브에이전트의 모델은 Opus 4.8 고정**(에이전트 정의에 내장) — 조절 대상은 thinking(effort)뿐이며, MCP 프로바이더의 모델은 레지스트리의 `model` 값(null=해당 CLI 기본 플래그십)으로 오케스트레이터가 지정한다. 오케스트레이터 본인도 PLAN·REVIEW·SYNTHESIZE 단계에서 깊이 검토하며 사고한다 — 계획의 허점과 결과의 모순을 찾는 것이 본인의 핵심 가치다.
+**모델·effort 해석 규칙**:
+
+1. 우선순위는 `인라인 요청 > 작업별 명시값 > model_policy와 model_allowlist에 따른 오케스트레이터 선택 > providers.<name>.model > inherit/default`다. `fixed`는 기본 모델을 고정하고, `inherit`는 호출 인자를 생략하며, `orchestrator`는 역할·난이도에 맞춰 허용 모델 중 고른다.
+2. 모델 ID·별칭은 `model_allowlist`에 있거나 사용자가 제공했거나 현재 호스트·도구에서 확인된 값만 사용한다. 오케스트레이터가 최신 모델명을 추측해 만들지 않는다. 허용 후보가 없거나 검증할 수 없으면 `inherit` 또는 기본값으로 폴백한다.
+3. effort가 대상 모델에서 지원되지 않으면 같은 프로바이더 사다리의 한 단계 낮은 값으로 폴백한다. 안전한 값이 없으면 effort 인자를 생략한다. 특정 모델 전용 effort(예: 일부 Codex의 `ultra`)와 오케스트레이션 프리셋(예: `ultracode`)을 서로 또는 다른 프로바이더 effort와 동일시하지 않는다.
+4. Claude native Agent는 모델을 호출별로 지정할 수 있지만 effort 호출 인자가 없다. 따라서 `CLAUDE EFFORT INTENT`는 작업 범위를 안내하고 실제 런타임 effort는 호스트 세션·에이전트 설정을 상속한다. Codex는 `config.model_reasoning_effort`로 호출별 전달한다.
+5. 계획표와 최종 보고에 `requested → resolved/actual`을 구분한다. 적용할 수 없는 값을 적용했다고 주장하지 않는다.
+
+오케스트레이터 본인도 PLAN·REVIEW·SYNTHESIZE 단계에서 깊이 검토한다. 메인 모델·effort는 플러그인이 바꾸지 않고 호스트 앱의 선택을 따른다.
 
 2. 사용자 요청에 포함된 인라인 오버라이드가 항상 config보다 우선한다 (예: "codex effort는 medium으로", "--mode critique"). 상세 스키마는 `references/config-reference.md` 참조.
 3. 활성(enabled) 프로바이더의 MCP 도구가 보이지 않으면 시작 전에 알리고 `/council-setup` 재실행을 권한다. 남은 프로바이더만으로 진행할지 묻는다.
@@ -53,17 +71,17 @@ description: >-
 - **목표 재정의**: 사용자 질문을 한 문장으로. 모호하면 이 단계에서만 1회 되묻는다.
 - **핵심 질문 3~7개**: 답이 나오면 목표가 해결되는 하위 질문.
 - **성공 기준**: 최종 답변이 반드시 포함해야 할 것 (수치·출처·비교·반론 등).
-- **트랙 분해와 난이도 배정**: 핵심 질문들을 1~`research.max_tracks`개의 **리서치 트랙**(주제적으로 응집된 묶음)으로 나누고, 트랙별 난이도를 판정한다 — easy(단순 사실 확인) / medium(다출처 종합) / hard(상충 근거 판정·깊은 분석) / critical(결론이 의사결정을 좌우). `research.difficulty_matrix`로 트랙별 모델·effort를 배정한다.
+- **트랙 분해와 난이도 배정**: 핵심 질문들을 1~`research.max_tracks`개의 **리서치 트랙**(주제적으로 응집된 묶음)으로 나누고, 트랙별 난이도를 판정한다 — easy(단순 사실 확인) / medium(다출처 종합) / hard(상충 근거 판정·깊은 분석) / critical(결론이 의사결정을 좌우). `research.difficulty_tiers` → `routing.tier_map` 순서로 reasoning tier와 프로바이더별 effort를 해석한다.
 - **리서처 편성**: 트랙마다 — `dual_from` 난이도 이상(기본 hard)은 **서로 다른 프로바이더 2개로 듀얼**(같은 트랙을 다른 렌즈로 교차 검증. 기본 페어는 claude+codex이며, 활성 프로바이더가 더 있으면 트랙 주제에 맞춰 선택: 예 — 기술·데이터=codex, 맥락·전략·반론=claude, 대안 시각=제3 프로바이더), 그 미만은 주제 적합성이 높은 프로바이더 **싱글**(수치·사실 확인형→codex류, 해석·전략형→claude). 같은 유형 리서처를 트랙 수만큼 여러 인스턴스 띄운다. 소형 질문은 1트랙 듀얼로 충분하다.
-- **배정표**(트랙 | 난이도 | 리서처 | effort)와 계획 요약을 사용자에게 보여주고 **즉시 진행**한다 (승인 대기 없음. 단, 사용자가 방향을 지적하면 반영).
+- **배정표**(트랙 | 난이도 | 리서처 | 모델 | reasoning tier | requested→resolved effort)와 계획 요약을 사용자에게 보여주고 **즉시 진행**한다 (승인 대기 없음. 단, 사용자가 방향을 지적하면 반영).
 
 ## 2. DISPATCH — 병렬 분배
 
-**모든 트랙의 모든 리서처 Task를 하나의 메시지에서 동시에 실행한다** (순차 금지):
+**모든 트랙의 모든 리서처 Agent 호출을 하나의 메시지에서 동시에 실행한다** (순차 금지. 호스트가 이 도구를 `Task`로 표시하면 해당 별칭 사용):
 
-- claude(native): `Task(subagent_type: "researcher-opus")` — 모델은 Opus 4.8 고정(에이전트 정의)
-- codex: `Task(subagent_type: "researcher-codex")` — 분할 호출 최적화 내장
-- 기타 MCP 프로바이더: `Task(subagent_type: "researcher-proxy")` — 브리프 끝에 `[PROVIDER SPEC]` 블록(레지스트리 항목의 tools·arg_map·split)을 그대로 포함시킨다
+- claude(native): `Agent(subagent_type: "researcher-claude")`. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. native Agent는 호출별 effort를 받지 않는다.
+- codex: `Agent(subagent_type: "researcher-codex")` — 분할 호출 최적화 내장
+- 기타 MCP 프로바이더: `Agent(subagent_type: "researcher-proxy")` — 브리프 끝에 `[PROVIDER SPEC]` 블록(레지스트리 항목의 tools·arg_map·capabilities·split)을 그대로 포함시킨다
 
 트랙별 별도 인스턴스로 스폰하며, 각 인스턴스에게 아래 브리프 템플릿을 채워 전달한다:
 
@@ -71,10 +89,12 @@ description: >-
 [RESEARCH BRIEF]
 TRACK: {트랙 이름} ({난이도})
 PROVIDER: {프로바이더명}
+MODEL: {resolved model 또는 "inherit/default"}
+REASONING TIER: {fast|balanced|deep|maximum}
 CODEX MODEL: {model 또는 "default"}            ← codex 브리프에만
-CODEX EFFORT: {트랙 배정 effort}               ← codex 브리프에만
-EFFORT: {트랙 배정 effort}                      ← proxy 브리프에만
-THINKING: {트랙 배정 thinking}                 ← claude 브리프에만
+CODEX EFFORT: {resolved effort 또는 "default"} ← codex 브리프에만
+EFFORT: {resolved effort 또는 "default"}       ← proxy 브리프에만
+CLAUDE EFFORT INTENT: {requested effort}        ← claude 브리프에만(실제값은 inherit)
 
 ## 목표
 {전체 목표 한 문장 + 이 트랙의 역할}
@@ -110,12 +130,12 @@ THINKING: {트랙 배정 thinking}                 ← claude 브리프에만
 최종 답변을 생성한다. 구조:
 
 1. **결론** — 목표에 대한 직접 답변. 계획의 성공 기준을 모두 충족하도록.
-2. **근거 종합** — 두 리서처의 근거를 주제별로 통합. 핵심 기여가 어느 모델에서 왔는지 표시 `(Codex)` `(Opus)` `(양쪽 일치)`.
+2. **근거 종합** — 두 리서처의 근거를 주제별로 통합. 핵심 기여가 어느 프로바이더에서 왔는지 표시 `(Codex)` `(Claude)` `(양쪽 일치)`.
 3. **모델 간 불일치와 판단** — 충돌 지점, 오케스트레이터의 판정과 이유. 없으면 생략.
 4. **남은 불확실성** — 확인 못 한 것, 낮은 확신도 항목.
 5. **출처** — 통합 목록.
 
-마지막에 사용 구성 한 줄: `council: {트랙 수}트랙 | codex ×{n}({efforts}) + opus ×{m}({thinkings}) | followups: N회`.
+마지막에 사용 구성 한 줄: `council: {트랙 수}트랙 | {provider ×n(model, requested→actual effort)} | followups: N회`.
 
 ## 모드 (mode)
 

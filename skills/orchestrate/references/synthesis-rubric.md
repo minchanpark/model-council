@@ -31,7 +31,7 @@
 - ... (양쪽 일치)
 
 ## 모델 간 불일치와 판단
-| 쟁점 | Codex | Opus | 판정 |
+| 쟁점 | Codex | Claude | 판정 |
 |---|---|---|---|
 
 ## 남은 불확실성
@@ -41,7 +41,7 @@
 - ...
 
 ---
-council: codex({model}/{effort}) + opus({thinking}) | followups: N회
+council: codex({model}, {requested→actual effort}) + claude({model}, {requested→inherited effort}) | followups: N회
 ```
 
 ## 4. critique 모드 통합 템플릿

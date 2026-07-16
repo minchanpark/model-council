@@ -4,7 +4,9 @@
 
 ## claude (native) — 항상 사용 가능
 - 연결: 없음 (호스트의 Claude 구독. Agent 도구로 스폰)
-- 모델: Opus 4.8 고정, effort_ladder: normal/deep/extra/max (thinking 깊이)
+- 모델: 기본 `inherit`. 확인된 Claude 모델 별칭·ID는 호출별 model로 지정 가능
+- effort_ladder: low/medium/high/xhigh/max. 단, native Agent 도구는 호출별 effort 인자를 받지 않으므로 실제 effort는 호스트 세션·에이전트 설정을 상속
+- capabilities: `per_call_model: true`, `per_call_effort: false`
 - write: true (coder-claude)
 
 ## codex (OpenAI) — 플러그인 동봉
@@ -15,8 +17,9 @@
   codex login
   ```
   MCP 서버는 플러그인 `.mcp.json`에 동봉(`codex mcp-server`) — 별도 등록 불필요. 도구가 안 보이면 앱 재시작, 그래도 안 되면 `.mcp.json`의 command를 `which codex` 절대경로로.
-- 기본 모델: null = CLI 기본 플래그십 (2026-07 현재 gpt-5.6-sol)
-- effort_ladder: minimal/low/medium/high/xhigh/ultra (플랜별 상이 — 미지원 값은 프록시가 제거 재시도)
+- 기본 모델: null = Codex CLI 기본 모델. 특정 모델명은 확인 없이 하드코딩하지 않음
+- effort_ladder: minimal/low/medium/high/xhigh/max (모델별 상이). 특정 모델에서 확인된 `ultra` 등은 명시 설정으로만 추가
+- capabilities: `per_call_model: true`, `per_call_effort: true`
 - write: true (coder-codex, workspace-write) / split: true (호출당 ~180초 제한 → 질문·단계 분할)
 - 스모크: `codex` 도구, prompt "Reply with exactly: codex smoke OK", sandbox read-only
 
@@ -39,11 +42,17 @@
 ## 사용자 정의 프로바이더
 카탈로그에 없는 AI MCP 도구도 등록 가능. 레지스트리에 직접 기입:
 ```json
-"myprovider": {
-  "type": "mcp", "enabled": true, "write": false,
-  "tools": { "call": "<도구 이름>", "reply": "<후속 도구, 없으면 생략>" },
-  "arg_map": { "model": "<모델 인자명>", "effort": "<effort 인자 경로>" },
-  "effort_ladder": ["low", "medium", "high"]
+{
+  "providers": {
+    "myprovider": {
+      "type": "mcp", "enabled": true, "write": false,
+      "model_policy": "orchestrator", "model": null, "model_allowlist": [],
+      "tools": { "call": "<도구 이름>", "reply": "<후속 도구, 없으면 생략>" },
+      "arg_map": { "model": "<모델 인자명>", "effort": "<effort 인자 경로>" },
+      "capabilities": { "per_call_model": true, "per_call_effort": true },
+      "effort_ladder": ["low", "medium", "high"]
+    }
+  }
 }
 ```
 스모크 테스트 통과 후 사용. 인자 스키마를 모르면 arg_map을 비워두고 프록시가 prompt만으로 호출하게 한다.
