@@ -23,9 +23,18 @@ description: >-
       "easy": "fast", "medium": "balanced", "hard": "deep", "critical": "maximum"
     },
     "max_fix_iterations": 3
+  },
+  "loops": {
+    "build": {
+      "integration": { "gate": "green_required", "max_fix_iterations": 2 },
+      "tests": { "verify_command_required": "when_available" }
+    },
+    "escalation": { "on_stall": ["retry_same", "tier_up", "switch_provider", "human_gate"], "max_steps": 3 }
   }
 }
 ```
+
+`loops.build.integration.gate`: `green_required`(기본, 실패 시 수정 루프+하드 게이트) / `report_only`(Bash 미지원 등 — 결과만 보고) / `off`(건너뜀). `loops.escalation`은 orchestrate·build 공용이다.
 
 **상태 파일**: `orchestrate` 스킬의 council-state 규약을 build에도 적용한다 — 실행 시작 시 생성, 각 페이즈 시작 시 재독·종료 시 갱신, 충돌 시 파일 우선, 채팅 미출력. 섹션: RUN META / 확정 계획(토론 종료 사유 포함) / 배정표 / 리뷰·수정 로그(패키지별 fix 카운트) / 게이트 이력 / 마찰 기록.
 
@@ -50,6 +59,7 @@ description: >-
 - **난이도 판정**: easy / medium / hard / critical — 판정 기준: 로직 복잡도, 실패 시 파급, 요구 맥락의 깊이.
 - **코더 배정**: `difficulty_tiers`와 `routing.tier_map`에 따라 활성 프로바이더 중 `write: true`인 것의 코더를 배정한다 — Claude 코더(기본 모델 상속, 필요 시 호출별 모델 지정), Codex 코더(모델·effort 전달), 기타 write 가능 프로바이더 코더(coder-proxy). 같은 유형 코더를 여러 개 띄울 수 있다. 배분 원칙 — Codex: 알고리즘·정형 구현·테스트 작성에 강점 / Claude: 기존 코드베이스 맥락 통합·리팩토링·설계 일관성에 강점. 교차 검증이 중요한 critical 패키지는 두 코더에게 **같은 패키지를 독립 구현**시켜 비교 선택할 수도 있다(비용 큼 — 명시적으로 필요할 때만). 이중 구현의 승자는 리뷰어가 채점 기준(① 명세·완료 기준 충족 ② 테스트 결과 ③ 엣지 케이스 처리 ④ 기존 코드베이스와의 일관성)으로 판정해 점수와 사유를 기록하고, 동점이면 오케스트레이터가 근거로 결정한다. 이중 구현은 파일 소유권 원칙과 충돌하므로 반드시 격리한다 — 각 코더에게 별도 브랜치 또는 별도 사본 디렉터리를 배정하고, 판정 후 승자 diff만 본선에 적용하며 패자 diff는 state 파일에 요약만 남기고 폐기한다.
 - **파일 소유권 분할 (필수)**: 패키지 간 수정 파일이 겹치지 않게 나눈다. 겹침이 불가피하면 그 패키지들은 병렬이 아니라 순차로 실행한다. 공유 인터페이스(타입·스키마)는 오케스트레이터가 먼저 확정해 모든 브리프에 포함한다.
+- **검증 명령 (P1-5)**: 패키지마다 완료 기준에 실행 가능한 **검증 명령을 최소 1개** 정의한다(환경이 명령 실행을 지원할 때). 명령은 완료 기준을 실제로 판별해야 한다 — 형식적 명령(`echo ok` 등) 금지. 배정표에 "이 명령이 완료 기준을 판별하는 근거"를 1줄로 남긴다. 실행 불가 환경이면 `검증 명령: 없음(사유)`으로 표기한다.
 
 배정표(패키지 | 난이도 | 코더 | 모델 | reasoning tier | requested→resolved effort | 소유 파일)를 사용자에게 보여주고 진행한다.
 
@@ -75,6 +85,7 @@ PROJECT DIR: {절대경로}
 ## 공유 인터페이스 (변경 금지)
 ## 구현 명세
 ## 완료 기준 (테스트·검증 방법 포함)
+## 검증 명령 (완료를 판별하는 실행 명령 ≥1, 환경 지원 시. 없으면 사유)
 ## 금지 사항 (소유 외 파일 수정, 인터페이스 변경, 의존성 추가 등)
 ```
 
@@ -84,11 +95,22 @@ PROJECT DIR: {절대경로}
 
 1. **교차 원칙**: Claude 코더의 diff는 Codex가, Codex 코더의 diff는 Claude `reviewer-claude-{tier}` 프로필이 리뷰한다. 자기 결과물을 자기가 리뷰하지 않는다. **오케스트레이터가 직접 작성한 글루 코드·설정 변경도 예외 없이 리뷰를 받는다(자기승인 금지)** — 원칙적으로 다른 프로바이더(기본 codex)에게 리뷰시킨다.
    - Codex 리뷰: `codex` 도구 직접 호출, diff 전문을 prompt에 포함, `sandbox: "read-only"`, effort는 패키지 난이도에서 해석한 resolved Codex effort. 요청: "Review this diff: bugs, edge cases, security, spec violations. Verdict: APPROVE or REJECT with reasons. Rate each finding: Critical / Major / Minor."
-   - Claude 리뷰: `Agent(subagent_type: "reviewer-claude-{tier}")`, diff와 명세 전달. 패키지 tier와 같은 프로필을 기본으로 하되 critical 통합 검토는 `maximum`을 쓴다. resolved model이 `inherit`이 아니면 model 인자도 전달한다.
-2. **판정과 수정 루프**: REJECT는 해당 코더에게 리뷰 코멘트와 함께 수정 지시(`SendMessage`로 이어가기). 수정본은 **같은 리뷰어에게 재제출**해 재판정받는다(리뷰어도 `SendMessage`로 이어가기, 불가 시 동일 프로필 재스폰). fix 카운트는 **패키지 단위**로 state 파일 리뷰·수정 로그에 기록하며 최대 `max_fix_iterations`회. 동일 지적이 2회 반복되면(정체) 남은 횟수를 소진하지 않고 하드 게이트로 이행한다. 리뷰어 간 충돌 시 오케스트레이터가 근거로 판정한다. **리뷰어의 REJECT·지적을 기각할 때는 사유를 반드시 기록하고 최종 보고에 포함한다** (사유 없는 기각 금지).
+   - Claude 리뷰: `Agent(subagent_type: "reviewer-claude-{tier}")`, diff와 명세, **패키지의 검증 명령(P1-5)** 을 전달한다. 패키지 tier와 같은 프로필을 기본으로 하되 critical 통합 검토는 `maximum`을 쓴다. resolved model이 `inherit`이 아니면 model 인자도 전달한다.
+   - **검증 명령 실행 (P1-5)**: 브리프에 검증 명령이 있으면 리뷰어는 그 명령을 **실행하는 것이 기본**이다(코더의 "테스트 통과" 주장을 말로만 신뢰하지 않는다). 실행 불가·안전하지 않으면 "검증 불가"로 사유를 남긴다.
+2. **판정과 수정 루프**: REJECT는 해당 코더에게 리뷰 코멘트와 함께 수정 지시(`SendMessage`로 이어가기). 수정본은 **같은 리뷰어에게 재제출**해 재판정받는다(리뷰어도 `SendMessage`로 이어가기, 불가 시 동일 프로필 재스폰). fix 카운트는 **패키지 단위**로 state 파일 리뷰·수정 로그에 기록하며 최대 `max_fix_iterations`회. 동일 지적이 2회 반복되면(정체) 남은 횟수를 소진하지 않고 **에스컬레이션 사다리(§4-6)** 로 이행한다. 리뷰어 간 충돌 시 오케스트레이터가 근거로 판정한다. **리뷰어의 REJECT·지적을 기각할 때는 사유를 반드시 기록하고 최종 보고에 포함한다** (사유 없는 기각 금지).
 3. **하드 게이트**: `max_fix_iterations`를 소진하고도 Critical 지적(리뷰어가 severity를 Critical로 표시한 것 — 명세 위반·데이터 손상·보안 결함 등 통합 불가 사유)이 해소되지 않은 패키지는 **통합하지 않는다**. 해당 패키지만 제외하고 진행할지, 전체 통합을 중단할지를 미해결 지적·수정 시도 이력과 함께 사용자에게 보고해 판단을 받는다. 자동 통합 금지.
-4. **통합 검증**: 전 패키지 승인 후 오케스트레이터가 전체 빌드·테스트를 실행(가능한 환경이면)하고 결과를 확인한다.
-5. **최종 보고**: 변경 요약, 패키지별 코더·리뷰 이력, 토론에서 결정된 사항 반영 여부, 기각한 리뷰 지적과 사유, 남은 TODO. 모델·effort는 requested→resolved/actual을 구분한다. 마지막 줄: `council-build: plan({provider} {model}, {requested→actual effort}, {N}라운드) | coders: {목록} | reviews: {승인/반려 수} | fixes: {수}`.
+4. **통합 검증 green 게이트 (P1-4)**: 전 패키지 승인 후 오케스트레이터가 전체 빌드·테스트를 실행한다.
+   - **신호**: 빌드·테스트 pass/fail — 플러그인 내 가장 객관적인 신호. `loops.build.integration.gate`가 `report_only`(Bash 미지원 등)면 결과만 보고하고 게이트를 걸지 않는다. `off`면 이 단계를 건너뛴다.
+   - **실패 시 루프**: 실패를 파일 소유권으로 해당 패키지에 귀속 → 소유 코더에 `SendMessage`로 수정 지시 → 재실행. 종료 조건은 먼저 오는 것: **green**(전체 통과) 또는 `loops.build.integration.max_fix_iterations`(기본 2) 소진. 통합 로그(시도·실패 테스트·귀속 패키지)를 state 파일에 기록한다.
+   - **귀속 불가**(패키지 간 상호작용 버그로 단일 소유자가 없음): 즉시 하드 게이트(§4-3)로 승격해 사용자에게 보고한다.
+   - **소진 시**: green이 아니면 하드 게이트 준용 — 자동 통합 금지, 미해결 상태를 사용자에게 보고.
+5. **최종 보고**: 변경 요약, 패키지별 코더·리뷰 이력, 토론에서 결정된 사항 반영 여부, 기각한 리뷰 지적과 사유, 통합 검증 결과(green/미해결), 남은 TODO. 모델·effort는 requested→resolved/actual을 구분한다. 마지막 줄: `council-build: plan({provider} {model}, {requested→actual effort}, {N}라운드) | coders: {목록} | reviews: {승인/반려 수} | fixes: {수} | integration: {green|report_only|미해결(사유)}`.
+
+6. **에스컬레이션 사다리 (P1-6)**: 수정 루프가 정체(동일 지적 2회 반복)되면 남은 횟수를 같은 조건으로 소진하지 않고 조건을 바꿔 돌파한다. `loops.escalation.on_stall` 순서(기본 아래), 각 스텝 1회, state 파일에 기록:
+   1. **같은 조건 재시도** — 리뷰 코멘트를 더 구체화해 1회 더.
+   2. **tier 상향** — 해당 코더를 한 단계 높은 reasoning tier 프로필로 재배정(예: deep→maximum).
+   3. **타 프로바이더 이관** — 다른 프로바이더 코더에게 해당 패키지를 넘긴다. Codex 미연결 등으로 불가하면 다른 Claude 프로필로 대체하고 "독립성 약화"를 보고에 명시한다.
+   4. **인간 게이트** — 사다리 소진 시 하드 게이트(§4-3)로 사용자 판단을 받는다.
 
 ## 금지 사항
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-07-18
+
+루프 엔지니어링 2단계 (설계: 「model-council 개선안 최종」 P1). build 객관 신호 강화 + 스킬 자기개선 루프 신설.
+
+- **P1-4 통합 검증 green 게이트**: build 최종 통합 검증에 실패 간선 신설 — 실패를 파일 소유권으로 패키지에 귀속 → 소유 코더 수정 → 재실행, green 또는 캡(`loops.build.integration.max_fix_iterations` 기본 2) 소진 시 하드 게이트. 귀속 불가 시 즉시 하드 게이트 승격. `gate: report_only`(Bash 미지원 환경) 폴백. 최종 보고에 `integration:` 표기.
+- **P1-5 검증 명령**: WORK PACKAGE에 `## 검증 명령` 필드 신설(완료를 판별하는 실행 명령 ≥1, 형식적 명령 금지). 리뷰어는 검증 명령이 있으면 **실행이 기본**(코더의 "테스트 통과" 주장을 말로만 신뢰하지 않음). reviewer-claude 정의에 반영.
+- **P1-6 에스컬레이션 사다리**: 정체(재질의·수정 루프에서 진전 없음) 시 남은 캡을 같은 조건으로 소진하지 않고 상향 — `retry_same → tier_up → switch_provider → human_gate`(`loops.escalation`, orchestrate·build 공용). Codex 미연결 시 다른 Claude 프로필로 대체하고 독립성 약화 명시.
+- **P1-7 `/council-retro` 스킬 신설**: 누적된 council-state 파일을 읽어 반복 마찰을 채굴하고 스킬 문서 편집안을 제안·스테이징하는 회고 루프(LOAD→HARVEST→MINE→PROPOSE→STAGE). SkillOpt 규율 번안 — 편집 예산(런당 ≤3건·순증 토큰 0 목표), 검증 게이트(사람 PR+사후 지표), 기각 편집 버퍼, 느린 업데이트(구조 변경은 ≥5런 근거). **스킬 파일 직접 수정 금지 — 제안 원장만 작성, 채택은 사람+git.** 자기 완화(캡 상향·게이트 완화 등) 제안 자동 플래그·격리.
+- **config v0.6**: `loops`에 `build.integration`, `build.tests`, `escalation`, `retro` 블록 추가.
+- **문서**: README/PLUGIN에 v0.6 반영 + **세션 중 플러그인 갱신 시 재로드 안내**(하네스가 스킬 정의를 캐시하므로 마켓플레이스 업데이트 후 앱/세션 재시작 필요).
+
 ## 0.5.0 — 2026-07-18
 
 루프 엔지니어링 1단계 (설계: 「model-council 개선안 최종」 P0). 원칙: 모든 반복에 캡 · 사람 게이트 불가침 · 스킬 수정은 사람+git.

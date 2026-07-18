@@ -15,6 +15,9 @@
 - `agents/coder-codex` — Codex 구현 프록시 (workspace-write, 소유 범위 검수)
 - `agents/reviewer-claude-{fast|balanced|deep|maximum}` — tier별 effort가 설정된 Claude 교차 리뷰어
 
+**회고** (`/council-retro`)
+- `skills/council-retro` — 누적된 council-state 파일(회의록)에서 반복 마찰을 채굴해 스킬 문서 편집안을 제안·스테이징(LOAD→HARVEST→MINE→PROPOSE→STAGE). SkillOpt 규율 번안(편집 예산·검증 게이트·기각 버퍼·느린 업데이트). **스킬 파일 직접 수정 금지 — 제안 원장(`council-retro-proposals.md`)만 작성, 채택은 사람+git.** 자기 완화 제안 자동 플래그. 양식: `references/proposal-template.md`
+
 **셋업** (`/council-setup`)
 - `skills/council-setup` — 프로바이더 연결 마법사: 사용 가능한 도구 스캔 → 사용자 선택 → 스모크 테스트 → `orchestrator.config.json` 레지스트리 저장. 미연결 프로바이더는 연결 방법 안내(설치·OAuth는 사용자 직접). 카탈로그: `references/known-providers.md`
 - `agents/researcher-proxy` · `agents/coder-proxy` — codex·claude 외 프로바이더용 범용 프록시 (레지스트리의 tools·arg_map으로 호출)

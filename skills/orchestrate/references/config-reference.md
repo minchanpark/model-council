@@ -1,4 +1,4 @@
-# orchestrator.config.json 레퍼런스 (v0.5)
+# orchestrator.config.json 레퍼런스 (v0.6)
 
 작업 폴더 루트에 두면 플러그인 자체를 수정하지 않고 프로바이더, 서브 모델, 추론 강도와 편성을 바꿀 수 있다. 파일이 없으면 각 스킬의 기본값(Claude + Codex)이 적용된다. 인라인 요청이 항상 최우선이며 `/council-setup`으로 생성·병합할 수 있다.
 
@@ -61,7 +61,16 @@
     "research": {
       "followups": { "policy": "until_criteria", "progress_required": true,
                      "max_rounds": 2, "per_track_max": 2 }
-    }
+    },
+    "build": {
+      "integration": { "gate": "green_required", "max_fix_iterations": 2 },
+      "tests": { "verify_command_required": "when_available" }
+    },
+    "escalation": { "on_stall": ["retry_same", "tier_up", "switch_provider", "human_gate"],
+                    "max_steps": 3 },
+    "retro": { "enabled": true, "max_proposals_per_run": 3,
+               "structural_change_min_runs": 5, "net_token_budget": 0,
+               "provider_tags": true }
   },
   "mode": "research"
 }
@@ -149,8 +158,16 @@ Claude native Agent는 호출별 effort 인자를 제공하지 않지만 서브�
 | `loops.research.followups.progress_required` | true면 정체(미충족 수 미감소) 시 조기 종료 |
 | `loops.research.followups.max_rounds` | 재질의 라운드 캡 (기본 2) |
 | `loops.research.followups.per_track_max` | 트랙당 재질의 캡 (기본 2) |
+| `loops.build.integration.gate` | `green_required`(기본) / `report_only` / `off` — 통합 검증 게이트(P1-4) |
+| `loops.build.integration.max_fix_iterations` | 통합 실패 시 수정 재실행 캡 (기본 2) |
+| `loops.build.tests.verify_command_required` | `when_available`(기본) — WORK PACKAGE 검증 명령 필드(P1-5) |
+| `loops.escalation.on_stall` | 정체 시 상향 사다리(P1-6, orchestrate·build 공용): `retry_same`→`tier_up`→`switch_provider`→`human_gate` |
+| `loops.escalation.max_steps` | 사다리 최대 스텝 (기본 3) |
+| `loops.retro.max_proposals_per_run` | /council-retro 런당 제안 상한 (기본 3) |
+| `loops.retro.structural_change_min_runs` | 구조 변경 제안에 필요한 반복 근거 런 수 (기본 5) |
+| `loops.retro.net_token_budget` | 스킬 순증 토큰 목표 (기본 0) |
 
-재질의 루프의 종료 조건은 셋 중 먼저 오는 것이다: 미충족 critical 기준 0(충족) / 정체 / 캡. 캡은 예산 상한이지 목표 횟수가 아니다 — 기준이 이미 충족이면 0회로 끝난다.
+재질의 루프의 종료 조건은 셋 중 먼저 오는 것이다: 미충족 critical 기준 0(충족) / 정체 / 캡. 캡은 예산 상한이지 목표 횟수가 아니다 — 기준이 이미 충족이면 0회로 끝난다. 정체가 감지되면 `loops.escalation` 사다리로 조건을 바꿔 돌파한다.
 
 ## 인라인 오버라이드 예시
 
