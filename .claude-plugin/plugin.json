@@ -1,6 +1,6 @@
 {
   "name": "model-council",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "멀티모델 리서치·개발 오케스트레이터 — 메인 오케스트레이터가 계획을 수립·토론하고 서브 에이전트들(Codex·Claude 코더/리서처)에게 병렬 작업을 지휘한 뒤, 초기 기획 기준으로 심사·통합해 최종 결과를 만든다.",
   "author": {
     "name": "NewDawn"

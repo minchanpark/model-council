@@ -5,7 +5,7 @@
 ## 구성
 
 **리서치** (`/orchestrate`)
-- `skills/orchestrate` — PLAN → DISPATCH → REVIEW → SYNTHESIZE + 모드(research/critique/consensus)
+- `skills/orchestrate` — PLAN → DISPATCH → REVIEW(평결표·기준 충족 기반 재질의 루프) → SYNTHESIZE + 모드(research/critique/consensus)
 - `agents/researcher-claude-{fast|balanced|deep|maximum}` — 지정 모델 + tier별 effort로 실행되는 Claude 독립 리서처
 - `agents/researcher-codex` — Codex 프록시 리서처 (read-only, 질문 단위 분할 호출)
 
@@ -21,6 +21,7 @@
 
 **공통**
 - `.mcp.json` — `codex mcp-server` 등록 (리서치·개발 공용, 서버 1개). 추가 프로바이더의 MCP는 사용자가 앱 설정에 등록하면 서브에이전트가 자동 상속
+- **상태 파일 (v0.5)** — 각 실행이 작업 폴더에 `council-state-{run}.md`를 남긴다(성공 기준·평결표·루프 로그·마찰 기록). 페이즈마다 재독·갱신하며 세션 기억과 충돌 시 파일이 우선. 끄기: `loops.state_file: false`
 
 안전 규칙: 리서치 경로의 Codex는 항상 read-only. 쓰기(workspace-write)는 `/build`의 coder-codex만 가능하며, `build.allow_codex_write: false`로 끌 수 있다.
 
@@ -66,7 +67,7 @@ codex login        # ChatGPT 계정 OAuth
 
 - **codex 도구가 안 보임**: GUI 앱은 PATH가 제한적이다. `.mcp.json`의 `"command": "codex"`를 `which codex` 결과의 절대경로(예: `/opt/homebrew/bin/codex`)로 바꿔 재설치하거나, 데스크탑 설정의 MCP 등록에서 절대경로를 사용.
 - **인증 오류**: 터미널에서 `codex login` 재실행.
-- **effort 값 오류**: 플랜·모델별 지원 값이 다르다. Codex는 한 단계 낮은 effort로 재시도하고, Claude는 한 단계 낮은 프로필로 재시도한다. 안전한 매핑이 없으면 기본값을 상속한다.
+- **effort 값 오류**: 폴백 규칙의 단일 출처는 `skills/orchestrate/references/config-reference.md`다 — 요지: 같은 사다리의 한 단계 낮은 값으로 재시도, 안전한 매핑이 없으면 기본값 상속.
 - **codex 타임아웃**: MCP 호출당 약 180초 제한. 프록시가 질문당 분할 호출하도록 설계돼 있으나, 그래도 걸리면 effort를 낮추거나 질문을 좁힐 것.
 - **모델 버전 오류** ("requires a newer version of Codex"): `npm i -g @openai/codex@latest` 후 데스크탑 앱 완전 재시작.
 

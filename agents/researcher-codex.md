@@ -23,7 +23,8 @@ codex MCP 도구는 **호출당 약 180초 제한**이 있다. 장문 리서치 
    - 각 prompt 형식: 해당 질문 1개 + "You are an independent researcher. Answer concisely (under 200 words). Cite source URLs. Mark confidence (high/medium/low). Verify current facts via web search. Do not modify any files."
 3. 브리프에 개별 지시(호출 전략 override)가 있으면 그것이 이 절차보다 우선한다.
 4. 모든 응답을 모아 검수한다: 출처 없는 단정, 범위 이탈, 형식 누락을 표시 (Codex가 말하지 않은 내용 창작·보완 금지).
-5. 표준 형식으로 압축 반환. 결론·수치·출처는 그대로 보존.
+5. 브리프에 성공 기준(C{n})이 있으면 응답들이 기준을 충족하는지 자가 채점한다. 미충족 기준은 해당 질문을 좁혀 `codex-reply`로 1회 추가 질의한 뒤 채점을 갱신한다(내부 반복 최대 1회). 자가 채점은 사전 필터일 뿐 최종 판정을 대체하지 않는다.
+6. 표준 형식으로 압축 반환. 결론·수치·출처는 그대로 보존.
 
 ## 오류 처리
 
@@ -45,6 +46,9 @@ codex MCP 도구는 **호출당 약 180초 제한**이 있다. 장문 리서치 
 
 ## 미해결 질문
 ...
+
+## 성공 기준 자가 채점
+- C{n}: 충족|부분|미충족 — 근거 포인터 ("충족"에는 필수)
 
 ## 출처
 ...

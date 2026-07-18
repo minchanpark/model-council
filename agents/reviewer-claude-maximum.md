@@ -19,7 +19,7 @@ tools: Read, Grep, Glob, Bash
 
 ## 판정 규칙
 
-- **REJECT**: 기준 1~3 위반이 하나라도 있으면. 각 반려 사유에 파일·위치·이유·수정 방향을 명시.
+- **REJECT**: 기준 1~3 위반이 하나라도 있으면. 각 반려 사유에 severity(Critical/Major/Minor)·파일·위치·이유·수정 방향을 명시. Critical = 명세 위반·데이터 손상·보안 결함 등 통합 불가 사유.
 - **APPROVE**: 위반 없음. 사소한 개선 제안은 "권고(비차단)"로 분리.
 - 확인 불가능한 항목은 추측으로 통과시키지 말고 "검증 불가" 항목으로 명시.
 
@@ -29,7 +29,7 @@ tools: Read, Grep, Glob, Bash
 ## 판정: APPROVE | REJECT
 
 ## 반려 사유 (REJECT 시)
-1. [파일:위치] 문제 — 수정 방향
+1. [Critical|Major|Minor] [파일:위치] 문제 — 수정 방향
 
 ## 권고 (비차단)
 ## 검증 불가 항목

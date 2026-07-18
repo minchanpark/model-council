@@ -1,4 +1,4 @@
-# orchestrator.config.json 레퍼런스 (v0.4)
+# orchestrator.config.json 레퍼런스 (v0.5)
 
 작업 폴더 루트에 두면 플러그인 자체를 수정하지 않고 프로바이더, 서브 모델, 추론 강도와 편성을 바꿀 수 있다. 파일이 없으면 각 스킬의 기본값(Claude + Codex)이 적용된다. 인라인 요청이 항상 최우선이며 `/council-setup`으로 생성·병합할 수 있다.
 
@@ -56,7 +56,13 @@
     },
     "max_fix_iterations": 3
   },
-  "max_followups": 1,
+  "loops": {
+    "state_file": "council-state-{run}.md",
+    "research": {
+      "followups": { "policy": "until_criteria", "progress_required": true,
+                     "max_rounds": 2, "per_track_max": 2 }
+    }
+  },
   "mode": "research"
 }
 ```
@@ -132,8 +138,19 @@ Claude native Agent는 호출별 effort 인자를 제공하지 않지만 서브�
 | `*.difficulty_tiers` | 난이도 → 공통 reasoning tier |
 | `build.plan` | 계획 토론 상대, 모델, reasoning tier, 최대 토론 라운드 |
 | `build.max_fix_iterations` | 교차 리뷰 반려 시 수정 루프 상한 |
-| `max_followups` | 리서처당 재질의 상한 |
 | `mode` | `research`, `critique`, `consensus` |
+
+## loops 필드 (v0.5)
+
+| 필드 | 설명 |
+|---|---|
+| `loops.state_file` | 상태 파일 이름 패턴. `false`면 상태 파일 없이 실행 |
+| `loops.research.followups.policy` | `until_criteria`(기준 충족 기반, 기본) / `fixed`(횟수만으로 종료 판단하는 구버전 동작) |
+| `loops.research.followups.progress_required` | true면 정체(미충족 수 미감소) 시 조기 종료 |
+| `loops.research.followups.max_rounds` | 재질의 라운드 캡 (기본 2) |
+| `loops.research.followups.per_track_max` | 트랙당 재질의 캡 (기본 2) |
+
+재질의 루프의 종료 조건은 셋 중 먼저 오는 것이다: 미충족 critical 기준 0(충족) / 정체 / 캡. 캡은 예산 상한이지 목표 횟수가 아니다 — 기준이 이미 충족이면 0회로 끝난다.
 
 ## 인라인 오버라이드 예시
 
@@ -145,7 +162,7 @@ Claude native Agent는 호출별 effort 인자를 제공하지 않지만 서브�
 
 ## 구버전 호환
 
-v0.3의 `difficulty_matrix`는 프로바이더별 effort의 명시 오버라이드로 해석한다. 최상위 `codex`/`claude` 블록, `claude_thinking`/`codex_effort`, `build.plan.codex_model`/`codex_effort`, `allow_codex_write`도 동일 의미로 읽는다. 저장할 때는 기존 키를 임의 삭제하지 말고 v0.4 구조를 병합한다.
+v0.3의 `difficulty_matrix`는 프로바이더별 effort의 명시 오버라이드로 해석한다. 최상위 `codex`/`claude` 블록, `claude_thinking`/`codex_effort`, `build.plan.codex_model`/`codex_effort`, `allow_codex_write`도 동일 의미로 읽는다. v0.4의 최상위 `max_followups`는 `loops.research.followups.max_rounds`의 별칭이다. 저장할 때는 기존 키를 임의 삭제하지 말고 최신 구조를 병합한다.
 
 ## 빠른 확인 프리셋
 
@@ -159,6 +176,6 @@ v0.3의 `difficulty_matrix`는 프로바이더별 effort의 명시 오버라이�
       "easy": "fast", "medium": "fast", "hard": "balanced", "critical": "deep"
     }
   },
-  "max_followups": 0
+  "loops": { "research": { "followups": { "max_rounds": 0 } } }
 }
 ```

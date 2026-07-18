@@ -1,6 +1,16 @@
 # 심사·통합 루브릭
 
-## 1. 심사 체크리스트 (리서처 결과별)
+## 1. 평결표 (심사 체크리스트)
+
+PLAN에서 동결한 기준 ID(C1…)별로 트랙(리서처)별 판정을 표로 만들어 state 파일에 기록한다(채팅 미출력). 서브에이전트의 자가 채점표는 사전 필터일 뿐 — "충족" 주장도 근거 포인터를 확인해 번복할 수 있다.
+
+```
+| 기준 ID | 판정 방법 | 트랙 A | 트랙 B | … | 종합 |
+|---|---|---|---|---|---|
+| C1 | (기계적 확인 | 정성 판정+사유) | 충족/부분/미충족 — 근거 포인터 | … | … | 충족/미충족 |
+```
+
+기준 작성·판정 시 기본 관점:
 
 | 항목 | 통과 기준 | 미달 시 |
 |---|---|---|
@@ -41,7 +51,7 @@
 - ...
 
 ---
-council: codex({model}, {requested→actual effort}) + claude({model}, {tier→profile effort}) | followups: N회
+council: codex({model}, {requested→actual effort}) + claude({model}, {tier→profile effort}) | followups: N회({종료 사유: 충족|정체|캡})
 ```
 
 ## 4. critique 모드 통합 템플릿
