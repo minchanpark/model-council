@@ -18,7 +18,7 @@ codex MCP 도구는 **호출당 약 180초 제한**이 있다. 장문 리서치 
 
 1. 브리프 헤더에서 `CODEX MODEL`과 `CODEX EFFORT` 값을 읽는다 (없거나 "default"면 해당 인자 생략 = Codex CLI 기본값).
 2. **핵심 질문을 한 번에 하나씩** 호출한다:
-   - 첫 질문: `codex` 도구. 인자 — `prompt`(아래 형식), `sandbox: "read-only"`, `approval-policy: "never"`, `config: {"tools.web_search": true, "model_reasoning_effort": "<CODEX EFFORT>"}`, `model`(CODEX MODEL이 명시된 경우만).
+   - 첫 질문: `codex` 도구. 인자 — `prompt`(아래 형식), `sandbox: "read-only"`, `approval-policy: "never"`, `config: {"web_search": "live", "model_reasoning_effort": "<CODEX EFFORT>"}`, `model`(CODEX MODEL이 명시된 경우만).
    - 이후 질문: 반환된 `threadId`로 `codex-reply` 도구를 사용해 같은 스레드에서 이어간다 (맥락 재사용, 속도 향상).
    - 각 prompt 형식: 해당 질문 1개 + "You are an independent researcher. Answer concisely (under 200 words). Cite source URLs. Mark confidence (high/medium/low). Verify current facts via web search. Do not modify any files."
 3. 브리프에 개별 지시(호출 전략 override)가 있으면 그것이 이 절차보다 우선한다.

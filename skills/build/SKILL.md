@@ -35,7 +35,7 @@ description: >-
 
 1. **초안**: 요구사항 분석 후 구현 계획 초안을 직접 작성한다 — 목표, 아키텍처 선택지와 본인의 선택+이유, 작업 분해 초안, 리스크, 성공 기준(테스트 가능해야 함).
 2. **토론 개시**: `plan.debate_provider`(기본 codex)의 도구를 직접 호출한다(프록시 에이전트를 쓰지 않는다 — 토론의 당사자는 오케스트레이터 본인이다):
-   - codex 기준 인자: `sandbox: "read-only"`, `approval-policy: "never"`, `config: {"model_reasoning_effort": "<resolved effort>", "tools.web_search": true}`, `model`(resolved model 명시 시), `cwd`(프로젝트 경로 — 코드베이스 참조 가능하게). 기본 `maximum` tier는 Codex `xhigh`로 해석한다. 다른 프로바이더면 레지스트리 `arg_map`을 따른다.
+   - codex 기준 인자: `sandbox: "read-only"`, `approval-policy: "never"`, `config: {"model_reasoning_effort": "<resolved effort>", "web_search": "live"}`, `model`(resolved model 명시 시), `cwd`(프로젝트 경로 — 코드베이스 참조 가능하게). 기본 `maximum` tier는 Codex `xhigh`로 해석한다. 다른 프로바이더면 레지스트리 `arg_map`을 따른다.
    - prompt: 계획 초안 전문 + "You are my peer architect, not my assistant. Attack this plan: wrong assumptions, better alternatives, hidden risks, missing work items. Propose concrete changes. Be direct."
 3. **라운드 진행**: Codex의 반박·대안을 검토하고, 수용/반박을 정리해 `codex-reply`(같은 threadId)로 재반박한다. 합의 또는 `max_debate_rounds` 도달까지. **동의하지 않는 지점은 오케스트레이터가 최종 결정하되, 결정 이유를 계획에 기록한다.**
    - **수렴·교착 조기 종료**: 각 라운드 후 직전 라운드 대비 **새로운 반박·대안·리스크가 나왔는지** 점검한다. 새 내용이 없으면(조기 수렴 또는 교착) 남은 라운드를 소진하지 않고 즉시 토론을 종료하고 계획을 확정한다. 종료 사유(합의 / 조기 수렴 / 교착 / 라운드 소진)를 계획에 기록한다.
