@@ -9,6 +9,7 @@
 - **스킬·프록시 갱신**: `/orchestrate`, `/build`, `/council-setup`, 범용 researcher/coder proxy와 config reference를 Host-neutral 구조로 개편했다.
 - **Codex 패키징**: 기존 `.claude-plugin`을 유지하면서 `.codex-plugin/plugin.json`을 추가했다. 별도 공통 코어 패키지는 만들지 않았다.
 - **제약 명시**: Antigravity CLI의 plain-text 출력, 제한적 자동 resume, 강제되지 않는 read-only를 경고와 문서에 반영했다.
+- **Codex read-only Host 호환**: runner의 불필요한 임시 디렉터리 생성을 제거하고 Codex JSONL에서 결과를 직접 추출해, 바깥 Host sandbox가 파일 생성을 막아도 외부 Claude Code·Antigravity CLI를 호출할 수 있게 했다.
 
 ## 0.6.1 — 2026-07-18
 

@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 const EFFORT = {
   fast: "low",
   balanced: "medium",
@@ -20,6 +17,19 @@ function findSessionId(value) {
   return null;
 }
 
+function findResult(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.item?.type === "agent_message" && typeof event.item.text === "string") {
+      return event.item.text.trim();
+    }
+    for (const candidate of [event?.result, event?.message, event?.output_text]) {
+      if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    }
+  }
+  return "";
+}
+
 export const codexAdapter = {
   id: "codex-cli",
   vendor: "openai",
@@ -36,10 +46,9 @@ export const codexAdapter = {
     perCallEffort: true,
   },
 
-  buildInvocation({ operation, sessionId, cwd, access, model, tier, tempDir }) {
-    const outputPath = path.join(tempDir, "last-message.txt");
+  buildInvocation({ operation, sessionId, cwd, access, model, tier }) {
     const effort = EFFORT[tier] || null;
-    const common = ["--json", "-o", outputPath];
+    const common = ["--json"];
     if (model) common.push("-m", model);
     if (effort) common.push("-c", `model_reasoning_effort=${JSON.stringify(effort)}`);
     common.push("-c", 'approval_policy="never"');
@@ -65,7 +74,6 @@ export const codexAdapter = {
       args,
       cwd,
       stdin: true,
-      outputPath,
       actual: { model: model || "default", effort: effort || "default", access },
       warnings: operation === "continue"
         ? ["Codex resume는 최초 세션의 cwd와 sandbox 설정을 상속한다."]
@@ -73,7 +81,7 @@ export const codexAdapter = {
     };
   },
 
-  async parse({ stdout, outputPath }) {
+  async parse({ stdout }) {
     const events = [];
     for (const line of stdout.split(/\r?\n/)) {
       if (!line.trim()) continue;
@@ -83,16 +91,9 @@ export const codexAdapter = {
         // Codex JSONL 외의 진단 행은 원문 결과 대신 stderr에서 다룬다.
       }
     }
-    let result = "";
-    try {
-      result = await readFile(outputPath, "utf8");
-    } catch {
-      const last = events.at(-1);
-      result = typeof last?.message === "string" ? last.message : "";
-    }
     return {
       sessionId: events.map(findSessionId).find(Boolean) || null,
-      result: result.trim(),
+      result: findResult(events),
     };
   },
 };

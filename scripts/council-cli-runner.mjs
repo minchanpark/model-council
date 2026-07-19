@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import os from "node:os";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { codexAdapter } from "./adapters/codex.mjs";
@@ -241,74 +240,67 @@ async function main() {
   if (!rawPrompt.trim()) throw new Error("prompt가 비어 있다.");
   const prompt = roleEnvelope(role, access, rawPrompt);
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "model-council-"));
-  try {
-    const invocation = adapter.buildInvocation({
-      operation,
-      sessionId: args["session-id"] || null,
-      cwd,
-      access,
-      model: args.model || null,
-      tier,
-      timeoutSeconds,
-      prompt,
-      tempDir,
-    });
+  const invocation = adapter.buildInvocation({
+    operation,
+    sessionId: args["session-id"] || null,
+    cwd,
+    access,
+    model: args.model || null,
+    tier,
+    timeoutSeconds,
+    prompt,
+  });
 
-    if (args["dry-run"]) {
-      const safeArgs = invocation.args.map((value) => value === prompt ? "<prompt>" : value);
-      process.stdout.write(`${JSON.stringify({
-        schemaVersion: 1,
-        dryRun: true,
-        provider: adapter.id,
-        vendor: adapter.vendor,
-        command: adapter.command,
-        args: safeArgs,
-        cwd: invocation.cwd,
-        actual: invocation.actual,
-        warnings: invocation.warnings,
-      }, null, 2)}\n`);
-      return;
-    }
-
-    const processResult = await runProcess(adapter.command, invocation.args, {
-      cwd: invocation.cwd,
-      input: invocation.stdin ? prompt : "",
-      timeoutMs: timeoutSeconds * 1000,
-    });
-    const parsed = await adapter.parse({
-      stdout: processResult.stdout,
-      stderr: processResult.stderr,
-      outputPath: invocation.outputPath,
-    });
-    const status = processResult.timedOut
-      ? "timeout"
-      : processResult.exitCode === 0 && parsed.result
-        ? "completed"
-        : "failed";
+  if (args["dry-run"]) {
+    const safeArgs = invocation.args.map((value) => value === prompt ? "<prompt>" : value);
     process.stdout.write(`${JSON.stringify({
       schemaVersion: 1,
+      dryRun: true,
       provider: adapter.id,
       vendor: adapter.vendor,
-      operation,
-      role,
-      status,
-      sessionId: parsed.sessionId,
-      result: parsed.result,
+      command: adapter.command,
+      args: safeArgs,
+      cwd: invocation.cwd,
       actual: invocation.actual,
       warnings: invocation.warnings,
-      diagnostics: {
-        exitCode: processResult.exitCode,
-        signal: processResult.signal,
-        timedOut: processResult.timedOut,
-        durationMs: processResult.durationMs,
-        stderr: processResult.stderr.trim(),
-      },
     }, null, 2)}\n`);
-    if (status !== "completed") process.exitCode = 1;
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    return;
   }
+
+  const processResult = await runProcess(adapter.command, invocation.args, {
+    cwd: invocation.cwd,
+    input: invocation.stdin ? prompt : "",
+    timeoutMs: timeoutSeconds * 1000,
+  });
+  const parsed = await adapter.parse({
+    stdout: processResult.stdout,
+    stderr: processResult.stderr,
+  });
+  const status = processResult.timedOut
+    ? "timeout"
+    : processResult.exitCode === 0 && parsed.result
+      ? "completed"
+      : "failed";
+  process.stdout.write(`${JSON.stringify({
+    schemaVersion: 1,
+    provider: adapter.id,
+    vendor: adapter.vendor,
+    operation,
+    role,
+    status,
+    sessionId: parsed.sessionId,
+    result: parsed.result,
+    actual: invocation.actual,
+    warnings: invocation.warnings,
+    diagnostics: {
+      exitCode: processResult.exitCode,
+      signal: processResult.signal,
+      timedOut: processResult.timedOut,
+      durationMs: processResult.durationMs,
+      stderr: processResult.stderr.trim(),
+    },
+  }, null, 2)}\n`);
+  if (status !== "completed") process.exitCode = 1;
 }
 
 main().catch((error) => {
