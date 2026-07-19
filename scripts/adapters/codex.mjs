@@ -41,12 +41,13 @@ export const codexAdapter = {
     resume: true,
     capturesSessionId: true,
     enforcedReadOnly: true,
-    workspaceWrite: true,
+    workspaceWrite: false,
     perCallModel: true,
     perCallEffort: true,
   },
 
   buildInvocation({ operation, sessionId, cwd, access, model, tier }) {
+    if (access !== "read-only") throw new Error("model-council supports read-only research only");
     const effort = EFFORT[tier] || null;
     const common = ["--json"];
     if (model) common.push("-m", model);

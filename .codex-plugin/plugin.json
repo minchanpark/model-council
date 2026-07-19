@@ -1,7 +1,7 @@
 {
   "name": "model-council",
-  "version": "0.7.0-beta.1",
-  "description": "Host-native subagents와 외부 Codex·Claude Code·Antigravity CLI를 조합하는 범용 멀티에이전트 오케스트레이터.",
+  "version": "0.8.0+codex.20260719205428",
+  "description": "Host-native researcher와 외부 Codex·Claude Code·Antigravity CLI를 조합하는 read-only 멀티모델 리서치 오케스트레이터.",
   "author": {
     "name": "NewDawn",
     "email": "itisnewdawn@gmail.com",
@@ -21,22 +21,18 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Model Council",
-    "shortDescription": "여러 에이전트와 CLI를 편성하는 모델 카운슬",
-    "longDescription": "현재 Host의 native subagent를 유지하면서 다른 vendor의 Codex, Claude Code, Antigravity CLI를 리서치·구현·교차 리뷰에 편성합니다.",
+    "shortDescription": "여러 모델을 편성하는 read-only 리서치 카운슬",
+    "longDescription": "현재 Host의 native researcher를 유지하면서 다른 vendor의 Codex, Claude Code, Antigravity CLI를 read-only 리서치와 교차 검증에 편성합니다.",
     "developerName": "NewDawn",
     "category": "Developer Tools",
     "capabilities": [
-      "Multi-agent orchestration",
-      "Research",
-      "Code implementation",
-      "Cross-review"
+      "Read-only multi-agent orchestration",
+      "Multi-vendor research",
+      "Evidence cross-validation",
+      "Research retrospectives"
     ],
     "websiteURL": "https://github.com/minchanpark/model-council",
-    "defaultPrompt": [
-      "여러 모델로 이 주제를 교차 검증해줘.",
-      "다른 에이전트와 토론하고 이 기능을 구현해줘.",
-      "현재 Host와 외부 CLI 편성을 점검해줘."
-    ],
+    "defaultPrompt": "여러 모델로 이 주제를 read-only로 교차 검증하고 출처와 불확실성을 함께 정리해줘.",
     "brandColor": "#4F46E5"
   }
 }

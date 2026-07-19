@@ -9,12 +9,13 @@ export const antigravityAdapter = {
     resume: true,
     capturesSessionId: false,
     enforcedReadOnly: false,
-    workspaceWrite: true,
+    workspaceWrite: false,
     perCallModel: true,
     perCallEffort: false,
   },
 
   buildInvocation({ operation, sessionId, cwd, access, model, timeoutSeconds, prompt }) {
+    if (access !== "read-only") throw new Error("model-council supports read-only research only");
     const args = [];
     if (operation === "continue") args.push("--conversation", sessionId);
     if (model) args.push("--model", model);
@@ -23,11 +24,9 @@ export const antigravityAdapter = {
     const warnings = [
       "Antigravity print mode는 현재 구조화 JSON 출력을 제공하지 않아 텍스트 결과를 정규화한다.",
     ];
-    if (access === "read-only") {
-      warnings.push(
-        "Antigravity CLI의 read-only는 프롬프트 규율이며 파일 쓰기를 기술적으로 완전히 차단하지 못한다.",
-      );
-    }
+    warnings.push(
+      "Antigravity CLI의 read-only는 프롬프트 규율이며 파일 쓰기를 기술적으로 완전히 차단하지 못한다.",
+    );
 
     return {
       args,
@@ -36,7 +35,7 @@ export const antigravityAdapter = {
       actual: {
         model: model || "default",
         effort: "inherited",
-        access: access === "read-only" ? "prompt-only-read-only" : "workspace-write",
+        access: "prompt-only-read-only",
       },
       warnings,
     };

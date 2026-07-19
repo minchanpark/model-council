@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +22,14 @@ function invoke(args, input = "") {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+
+assert(!existsSync(path.join(pluginRoot, "skills", "build")), "build skill directory still exists");
+assert(!existsSync(path.join(pluginRoot, ".mcp.json")), "plugin-scoped writable MCP surface still exists");
+const agentFiles = readdirSync(path.join(pluginRoot, "agents"));
+assert(
+  !agentFiles.some((name) => name.startsWith("coder-") || name.startsWith("reviewer-")),
+  "coder or reviewer agent definitions still exist",
+);
 
 const vendors = ["openai", "anthropic", "google"];
 const expectedSameVendor = {
@@ -80,6 +89,34 @@ for (const provider of ["codex", "claude", "antigravity"]) {
   assert(result.actual.access !== "workspace-write", `${provider}: read-only dry-run이 write로 해석됨`);
   dryRuns.push({ provider: result.provider, access: result.actual.access });
 }
+
+const writeAttempt = spawnSync(process.execPath, [runner,
+  "run",
+  "--provider",
+  "codex",
+  "--role",
+  "researcher",
+  "--cwd",
+  pluginRoot,
+  "--access",
+  "workspace-write",
+  "--dry-run",
+], { input: "Do not modify files.", encoding: "utf8" });
+assert(writeAttempt.status !== 0, "workspace-write가 research-only runner에서 허용됨");
+
+const buildRoleAttempt = spawnSync(process.execPath, [runner,
+  "run",
+  "--provider",
+  "codex",
+  "--role",
+  "coder",
+  "--cwd",
+  pluginRoot,
+  "--access",
+  "read-only",
+  "--dry-run",
+], { input: "Do not modify files.", encoding: "utf8" });
+assert(buildRoleAttempt.status !== 0, "coder 역할이 research-only runner에서 허용됨");
 
 process.stdout.write(`${JSON.stringify({
   status: "passed",

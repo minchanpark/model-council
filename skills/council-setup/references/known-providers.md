@@ -5,7 +5,7 @@
 ## Host-native agent — 외부 provider가 아님
 
 - 감지: 현재 Host가 제공하는 Agent/Task/collaboration/subagent 기능
-- 역할: researcher, architect, coder, reviewer
+- 역할: researcher
 - 연결: Host 로그인·구독을 그대로 사용하며 별도 CLI 설치가 없다.
 - 핵심 규칙: `exclude_host_vendor_from_external_providers`의 영향을 받지 않는다. Codex Host는 Codex native subagent를, Claude Host는 Claude Agent를 계속 여러 개 사용할 수 있다.
 - 독립성: Host와 같은 vendor이므로 다른 vendor의 교차검증 1표로 세지 않는다.
@@ -23,8 +23,8 @@ codex login
 
 - noninteractive: `codex exec`; structured output: JSONL; resume: 지원
 - model/effort: 호출별 지정 가능. 모델 ID는 확인된 값만 사용
-- access: `read-only`, `workspace-write`를 sandbox로 강제 가능
-- transport: CLI 기본. 기존 `.mcp.json`의 `codex mcp-server`도 호환
+- access: `read-only`를 sandbox로 강제. model-council은 `workspace-write`를 노출하지 않음
+- transport: CLI 기본. Host가 별도로 노출한 MCP는 read-only capability를 확인한 뒤 사용
 - same-vendor: OpenAI Host에서는 외부 후보에서 기본 제외되지만 Codex native subagent는 계속 사용 가능
 
 ## claude-code-cli (Anthropic)
@@ -46,7 +46,7 @@ codex login
 - noninteractive: `agy --print`; model 지정 가능; 직접 effort tier 인자 없음
 - resume: CLI는 `--conversation <id>`를 지원하지만 print 출력에서 session ID를 안정적으로 회수하지 못하면 runner는 새 세션+이전 맥락 폴백을 사용한다.
 - output: 현재 구조화 JSON이 아닌 plain text
-- access: `--sandbox`를 사용하지만 read-only를 완전히 강제하지 못한다. 리서치·리뷰는 승인된 작업 폴더에서만 실행하고 prompt-only read-only 경고를 남긴다.
+- access: `--sandbox`를 사용하지만 read-only를 완전히 강제하지 못한다. 리서치는 승인된 작업 폴더에서만 실행하고 prompt-only read-only 경고를 남긴다.
 - same-vendor: Google Host에서는 외부 후보에서 기본 제외되며 native subagent와는 별도다.
 
 ## 공통 확인 명령
@@ -91,7 +91,7 @@ node scripts/council-cli-runner.mjs route --host-vendor google
 }
 ```
 
-도구 스키마를 확인한 값만 `arg_map`과 capability에 기록한다. 스모크 통과 전에는 `enabled: false`, 쓰기 검증 전에는 `write: false`가 기본이다.
+도구 스키마를 확인한 값만 `arg_map`과 capability에 기록한다. 스모크 통과 전에는 `enabled: false`이며 `write: false`는 변경할 수 없다.
 
 ## 사용자 정의 CLI adapter
 
@@ -102,3 +102,7 @@ node scripts/council-cli-runner.mjs route --host-vendor google
 - `parse(...)`: `sessionId`, `result` 정규화
 
 API 키·비밀번호를 config나 prompt에 넣지 않는다. 각 CLI의 공식 로그인 저장소를 사용한다.
+
+사용자 정의 adapter도 `researcher`와 `read-only`만 허용해야 한다. 개발 역할과
+쓰기 adapter는 model-council 범위가 아니며 `document-driven-development`에서
+관리한다.

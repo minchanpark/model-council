@@ -16,30 +16,27 @@ export const claudeCodeAdapter = {
     resume: true,
     capturesSessionId: true,
     enforcedReadOnly: true,
-    workspaceWrite: true,
+    workspaceWrite: false,
     perCallModel: true,
     perCallEffort: true,
   },
 
   buildInvocation({ operation, sessionId, cwd, access, model, tier }) {
+    if (access !== "read-only") throw new Error("model-council supports read-only research only");
     const effort = EFFORT[tier] || null;
     const args = ["-p", "--output-format", "json"];
     if (operation === "continue") args.push("--resume", sessionId);
     if (model) args.push("--model", model);
     if (effort) args.push("--effort", effort);
 
-    if (access === "read-only") {
-      args.push(
-        "--permission-mode",
-        "plan",
-        "--tools",
-        "Read,Grep,Glob,WebSearch,WebFetch",
-        "--disallowedTools",
-        "Write,Edit,Bash,NotebookEdit",
-      );
-    } else {
-      args.push("--permission-mode", "dontAsk");
-    }
+    args.push(
+      "--permission-mode",
+      "plan",
+      "--tools",
+      "Read,Grep,Glob,WebSearch,WebFetch",
+      "--disallowedTools",
+      "Write,Edit,Bash,NotebookEdit",
+    );
 
     return {
       args,

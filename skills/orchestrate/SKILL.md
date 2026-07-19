@@ -10,6 +10,8 @@ description: >-
 # Model Council — 멀티모델 리서치 오케스트레이션
 
 당신은 이 워크플로의 **오케스트레이터**다. 직접 리서치하지 않는다. 방향 수립 → 분배 → 심사 → 통합만 수행한다.
+이 플러그인은 read-only 리서치 전용이다. 코드, 테스트, 문서, 설정, 마이그레이션,
+인프라를 수정하지 않으며 모든 worker는 `researcher`와 `read-only`만 사용한다.
 
 ## 0. 설정 로드
 
@@ -21,20 +23,20 @@ description: >-
   "host": {
     "surface": "auto", "vendor": "auto",
     "native_agents": { "enabled": true, "max_concurrency": 4,
-                       "roles": ["researcher", "architect", "coder", "reviewer"],
+                       "roles": ["researcher"],
                        "allow_parallel": true, "allow_followup": true }
   },
   "providers": {
     "codex-cli": { "vendor": "openai", "type": "external", "adapter": "codex",
-                   "transports": ["mcp", "cli"], "enabled": true, "write": true,
+                   "transports": ["mcp", "cli"], "enabled": true, "write": false,
                    "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                    "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] },
     "claude-code-cli": { "vendor": "anthropic", "type": "external", "adapter": "claude-code",
-                         "transports": ["cli"], "enabled": true, "write": true,
+                         "transports": ["cli"], "enabled": true, "write": false,
                          "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                          "effort_ladder": ["low", "medium", "high", "xhigh", "max"] },
     "antigravity-cli": { "vendor": "google", "type": "external", "adapter": "antigravity",
-                         "transports": ["cli"], "enabled": true, "write": true,
+                         "transports": ["cli"], "enabled": true, "write": false,
                          "model_policy": "orchestrator", "model": null, "model_allowlist": [],
                          "effort_ladder": [] }
   },
@@ -52,7 +54,7 @@ description: >-
     }
   },
   "loops": {
-    "state_file": "council-state-{run}.md",
+    "state": { "storage": "session" },
     "research": {
       "followups": { "policy": "until_criteria", "progress_required": true,
                      "max_rounds": 2, "per_track_max": 2 }
@@ -77,9 +79,12 @@ description: >-
 2. 사용자 요청에 포함된 인라인 오버라이드가 항상 config보다 우선한다 (예: "codex effort는 medium으로", "--mode critique"). 상세 스키마는 `references/config-reference.md` 참조.
 3. 활성 provider의 CLI/MCP가 probe에 실패하면 `/council-setup` 재실행을 권하고, 성공한 외부 provider와 Host-native 풀로 축소 진행한다. 외부 provider가 전멸했으면 독립성 약화를 먼저 알린다.
 
-## 상태 파일 — council-state (모든 페이즈 공통)
+## 실행 원장 — 세션 메모리 (모든 페이즈 공통)
 
-`loops.state_file`이 `false`가 아니면 실행 시작 시 작업 폴더에 `council-state-{날짜-주제슬러그}.md`를 생성한다. **각 페이즈 시작 시 재독하고 종료 시 갱신한다.** 파일과 세션 기억이 충돌하면 파일이 진실이며, 그 사실을 사용자에게 알린다. 기록은 채팅에 출력하지 않는다(소음 방지) — 파일에만 남긴다. 고정 헤딩:
+실행 시작 시 아래 구조의 원장을 현재 세션 상태로 만들고 각 페이즈 시작과
+종료 때 갱신한다. 저장소나 작업 폴더에는 어떤 state 파일도 만들지 않는다.
+사용자가 이전 실행 기록을 명시적으로 제공하면 읽기 전용 입력으로 합칠 수
+있지만, 플러그인이 파일로 내보내거나 갱신하지 않는다. 고정 헤딩:
 
 ```
 # COUNCIL STATE — {run}
@@ -145,15 +150,15 @@ HOST/VENDOR: {host surface/vendor} → {provider vendor}
 
 브리프 작성 규칙: 분할 실행 provider의 핵심 질문은 트랙당 3개 이하로 유지한다. 질문이 많으면 트랙을 더 나눈다. 성공 기준에는 해당 트랙 몫의 기준 ID(C{n})를 그대로 사용한다.
 
-**트랙 부분 실패 처리**: 일부 리서처만 실패(오류·무응답)하면 해당 트랙을 1회 재스폰한다. 재실패 시 그 트랙 없이 축소 진행하되, 한계를 state 파일과 최종 답변에 명시한다 (서브 전멸 예외와 구분).
+**트랙 부분 실패 처리**: 일부 리서처만 실패(오류·무응답)하면 해당 트랙을 1회 재스폰한다. 재실패 시 그 트랙 없이 축소 진행하되, 한계를 실행 원장과 최종 답변에 명시한다 (서브 전멸 예외와 구분).
 
 ## 3. REVIEW — 심사 (계획 기준)
 
-**블라인드 사전 평결 (열람 전 필수)**: 트랙 결과를 열람하기 **전에** 기준별 자신의 사전 예상을 한 줄씩 state 파일 "블라인드 사전 평결" 섹션에 기록한다(채팅 미출력). 결과 열람 후에는 동결된 성공 기준을 완화·수정하지 않는다 — 서브 결과에 휩쓸리는 것을 막는 장치다. 사전 예상과 서브 결과가 크게 다른 지점은 우선 검증 대상으로 삼는다.
+**블라인드 사전 평결 (열람 전 필수)**: 트랙 결과를 열람하기 **전에** 기준별 자신의 사전 예상을 한 줄씩 세션 실행 원장의 "블라인드 사전 평결" 섹션에 기록한다(채팅 미출력). 결과 열람 후에는 동결된 성공 기준을 완화·수정하지 않는다 — 서브 결과에 휩쓸리는 것을 막는 장치다. 사전 예상과 서브 결과가 크게 다른 지점은 우선 검증 대상으로 삼는다.
 
 모든 트랙 결과를 받으면 `references/synthesis-rubric.md`의 루브릭으로 심사한다:
 
-1. **평결표 작성**: 기준 ID × 트랙 판정(충족/부분/미충족 + 근거 포인터)을 state 파일에 기록한다(채팅 미출력). 서브에이전트의 자가 채점표는 사전 필터로만 쓰고, "충족" 주장도 근거 포인터를 확인해 번복할 수 있다. 듀얼 트랙은 두 리서처 간 모순도 함께 본다.
+1. **평결표 작성**: 기준 ID × 트랙 판정(충족/부분/미충족 + 근거 포인터)을 세션 실행 원장에 기록한다(채팅 미출력). 서브에이전트의 자가 채점표는 사전 필터로만 쓰고, "충족" 주장도 근거 포인터를 확인해 번복할 수 있다. 듀얼 트랙은 두 리서처 간 모순도 함께 본다.
 2. **모순 식별**: 두 모델의 결론이 충돌하는 지점을 명시적으로 나열한다.
 3. **근거 품질**: 출처 없는 단정, 오래된 정보, 확신도 낮은 핵심 주장을 표시한다.
 4. **재질의 루프**: 미충족 기준이 있으면 그 기준만 겨냥해 후속 질문을 보낸다. Host-native는 현재 Host의 follow-up 기능을, 외부 CLI는 runner `continue`와 `sessionId`를 사용한다. 이어가기가 불가능하면 동일 브리프 + 이전 결과 요약으로 새 세션을 실행한다. 종료 조건은 충족 / 정체 / `loops.research.followups.max_rounds` 캡 중 먼저 오는 것이다. 정체 시 같은 조건 재시도 → tier 상향 → 다른 vendor provider 이관 → 인간 게이트 순으로 에스컬레이션한다. 다른 vendor가 없어 Host-native로 대체하면 `독립성 약화`를 기록한다. 미충족 결론은 확신도를 강등하고 `미검증` 라벨을 붙인다.
@@ -188,3 +193,4 @@ HOST/VENDOR: {host surface/vendor} → {provider vendor}
 - 서브 결과에 없는 사실을 통합 단계에서 창작하는 것.
 - 두 리서처에게 완전히 동일한 관점을 주는 것 (consensus 모드 제외).
 - 결과 열람 후 심사 체크리스트를 완화하는 것, 사유 없는 서브 결론 기각.
+- 저장소 또는 작업 폴더에 state, proposal, code, document, config 파일을 생성·수정하는 것.

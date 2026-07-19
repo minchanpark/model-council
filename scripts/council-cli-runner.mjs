@@ -17,8 +17,8 @@ const adapters = new Map([
   ["agy", antigravityAdapter],
 ]);
 
-const ROLES = new Set(["researcher", "architect", "coder", "reviewer"]);
-const ACCESS = new Set(["read-only", "workspace-write"]);
+const ROLES = new Set(["researcher"]);
+const ACCESS = new Set(["read-only"]);
 const TIERS = new Set(["fast", "balanced", "deep", "maximum"]);
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 
@@ -117,12 +117,12 @@ Usage:
   node scripts/council-cli-runner.mjs continue --provider <id> --session-id <id> --role <role> --cwd <dir> [options]
 
 Options:
-  --access read-only|workspace-write
+  --access read-only             The only supported access mode
   --tier fast|balanced|deep|maximum
   --model <verified-model-id>
   --prompt-file <path>      Otherwise read the prompt from stdin
   --timeout-seconds <30..3600>
-  --dry-run                 Build and validate the invocation without starting the provider
+  --dry-run                 Construct and validate the invocation without starting the provider
 `;
 }
 
@@ -140,9 +140,7 @@ async function readPrompt(args) {
 }
 
 function roleEnvelope(role, access, prompt) {
-  const constraint = access === "read-only"
-    ? "파일을 수정하지 말고 읽기·분석·검증만 수행한다."
-    : "명시된 작업 범위와 소유 파일만 수정하고 검증 결과를 보고한다.";
+  const constraint = "파일을 수정하지 말고 읽기·분석·검증만 수행한다.";
   return `[MODEL COUNCIL TASK]\nROLE: ${role}\nACCESS: ${access}\n${constraint}\n\n${prompt.trim()}\n\n[RETURN]\n결론/변경 요약, 근거 또는 변경 파일, 검증 결과, 미해결 항목을 명확히 구분해 반환한다.`;
 }
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0 — 2026-07-19
+
+- **research-only 책임 분리**: `/build`, coder, reviewer agent를 제거하고
+  `/orchestrate`, `/council-setup`, `/council-retro`만 유지했다.
+- **쓰기 권한 제거**: provider runner가 `researcher`와 `read-only`만 허용하며
+  `workspace-write`와 개발 역할을 실행 전에 거부한다. 모든 adapter의
+  `workspaceWrite` capability를 false로 고정했다.
+- **DDD 이관**: locked-plan debate, package decomposition, isolated
+  implementation, cross-review, fix/escalation, green integration 흐름은
+  `document-driven-development`로 독립 이식했다.
+- **main marketplace**: Claude와 Codex용 GitHub marketplace가 모두 main을
+  가리키도록 정리했다.
+- **호환**: 과거 config의 build/write 키는 보존될 수 있지만 v0.8 runtime에서
+  무시되며 활성화되지 않는다.
+
 ## 0.7.0-beta.1 — 2026-07-19
 
 - **Host 일반화**: 메인 오케스트레이터를 Claude로 고정하지 않고 Codex/GPT, Claude, Antigravity, 기타 Host로 추상화했다.

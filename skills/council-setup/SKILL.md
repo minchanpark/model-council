@@ -4,16 +4,18 @@ description: >-
   model-council의 Host-native 서브에이전트와 외부 CLI/MCP provider 편성을 설정한다. 사용자가
   "카운슬 셋업", "council setup", "프로바이더 설정/연결/추가", "어떤 모델 연결돼 있어?" 등을
   요청하거나 플러그인 설치 직후 첫 오케스트레이션 전에 트리거된다. Host를 감지하고 Codex CLI,
-  Claude Code CLI, Antigravity CLI 등을 probe한 뒤 orchestrator.config.json에 안전하게 병합한다.
+  Claude Code CLI, Antigravity CLI 등을 probe한 뒤 read-only 설정안을 채팅으로 제안한다.
 ---
 
 # Council Setup — Host·provider 연결 마법사
 
-당신은 설정 마법사다. 인증정보를 받거나 로그인을 대신하지 않는다. 재실행해도 기존 설정과 알 수 없는 키를 보존하고, 사용자가 명시하지 않은 provider를 삭제하지 않는다.
+당신은 read-only 설정 마법사다. 인증정보를 받거나 로그인을 대신하지 않으며
+`orchestrator.config.json`이나 다른 파일을 생성·수정하지 않는다. 기존 설정은
+읽기만 하고, 변경안은 채팅으로 제안한다.
 
 ## 1. SCAN — Host와 실행 수단 감지
 
-1. 작업 폴더 루트의 `orchestrator.config.json`을 읽는다. 없으면 신규 생성 예정으로 표시한다.
+1. 작업 폴더 루트의 `orchestrator.config.json`을 읽는다. 없으면 세션 기본값 사용으로 표시한다.
 2. 현재 실행 표면을 `claude-code`, `claude-cowork`, `codex`, `other` 중 하나로, Host vendor를 `anthropic`, `openai`, `google`, `unknown` 중 하나로 판정한다. 불명확하면 둘 다 `auto`로 저장하고 현재 관찰값만 보고한다.
 3. Host가 native subagent/collaboration 기능을 제공하면 이를 **Host-native agent pool**로 별도 표시한다. 이 pool은 외부 CLI provider와 다른 계층이며 기본 `enabled: true`다.
 4. 플러그인 루트의 runner로 외부 CLI를 probe한다.
@@ -37,9 +39,9 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
 다음 두 그룹을 분리한 표를 보여준다.
 
 - Host: 표면/vendor/native agent 지원 여부와 활성 상태
-- External providers: provider/vendor/설치·인증 상태/transport/쓰기 가능 여부/resume/구조화 출력/제한
+- External providers: provider/vendor/설치·인증 상태/transport/read-only 강제 여부/resume/구조화 출력/제한
 
-그 다음 연결된 외부 provider 중 활성화할 항목, build 쓰기 권한, 검증된 기본 모델 ID를 확인한다. 모델을 확인할 수 없으면 `null`, allowlist는 `[]`로 둔다. 기본 권장은 Host-native 활성화 + Host와 다른 vendor의 설치된 CLI 활성화다.
+그 다음 연결된 외부 provider 중 활성화할 항목과 검증된 기본 모델 ID를 확인한다. 모델을 확인할 수 없으면 `null`, allowlist는 `[]`로 둔다. 모든 provider의 `write`는 `false`이며 기본 권장은 Host-native 활성화 + Host와 다른 vendor의 설치된 CLI 활성화다.
 
 ## 4. VERIFY — 안전한 스모크 테스트
 
@@ -51,9 +53,11 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
 
 로그인이나 설치가 필요하면 `known-providers.md`의 명령만 안내하고 사용자가 직접 실행하게 한다. 계정 정보·API 키·비밀번호를 묻지 않는다.
 
-## 5. WRITE — 설정 병합
+## 5. PROPOSE — 설정안 반환
 
-다음 v0.7 구조를 기준으로 병합한다. 기존 다른 키는 보존한다.
+다음 v0.8 research-only 구조를 기준으로 현재 세션에 적용할 설정안을 채팅으로
+반환한다. 기존 다른 키는 제안에서 보존하되 과거 build/write 키는 실행에
+사용하지 않는다. 파일 쓰기 도구를 호출하지 않는다.
 
 ```json
 {
@@ -64,7 +68,7 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
     "native_agents": {
       "enabled": true,
       "max_concurrency": 4,
-      "roles": ["researcher", "architect", "coder", "reviewer"]
+      "roles": ["researcher"]
     }
   },
   "providers": {
@@ -74,7 +78,7 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
       "adapter": "codex",
       "transports": ["cli", "mcp"],
       "enabled": true,
-      "write": true,
+      "write": false,
       "model_policy": "orchestrator",
       "model": null,
       "model_allowlist": [],
@@ -86,7 +90,7 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
       "adapter": "claude-code",
       "transports": ["cli"],
       "enabled": true,
-      "write": true,
+      "write": false,
       "model_policy": "orchestrator",
       "model": null,
       "model_allowlist": [],
@@ -98,7 +102,7 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
       "adapter": "antigravity",
       "transports": ["cli"],
       "enabled": true,
-      "write": true,
+      "write": false,
       "model_policy": "orchestrator",
       "model": null,
       "model_allowlist": [],
@@ -114,8 +118,16 @@ node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정�
 }
 ```
 
-구 `providers.claude` native 설정은 Host가 Claude일 때 `host.native_agents`로 해석한다. 구 `providers.codex`는 `providers.codex-cli`로 이관하되 기존 키를 삭제하지 않는다. 상세 호환 규칙은 `../orchestrate/references/config-reference.md`를 따른다.
+구 `providers.claude` native 설정은 Host가 Claude일 때 `host.native_agents`로
+해석한다. 구 `providers.codex`는 `providers.codex-cli` 제안으로 변환하되 원본
+파일을 바꾸지 않는다. 상세 호환 규칙은
+`../orchestrate/references/config-reference.md`를 따른다.
 
 ## 6. 마무리
 
-최종 표에 Host-native와 External providers를 분리하고 각 provider의 `enabled`, 역할, transport, 모델, effort, read-only 강제 여부를 표시한다. 마지막에 `/orchestrate`와 `/build`에서 새 편성이 사용되며, **Host 자신의 native subagent는 외부 same-vendor 제외와 무관하게 계속 사용 가능**하다고 명시한다.
+최종 표에 Host-native와 External providers를 분리하고 각 provider의 `enabled`,
+역할, transport, 모델, effort, read-only 강제 여부를 표시한다. 이번 세션에
+적용할 routing과 파일 미변경 사실을 명시한다. `/orchestrate`에서 새 편성을
+사용하며, **Host 자신의 native subagent는 외부 same-vendor 제외와 무관하게
+계속 사용 가능**하다고 설명한다. model-council은 구현 권한을 제공하지 않으며
+개발은 document-driven-development를 사용한다고 안내한다.
