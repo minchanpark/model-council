@@ -25,7 +25,7 @@ Claude 플러그인 마켓플레이스.
 
 | 플러그인 | 버전 | 설명 |
 |---|---|---|
-| model-council | 0.6.0 | 멀티모델 리서치(/orchestrate)·개발(/build)·회고(/council-retro) 오케스트레이터 + 프로바이더 셋업(/council-setup) · 루프 엔지니어링(상태 파일·평결 루프·통합 게이트·에스컬레이션·스킬 자기개선) |
+| model-council | 0.6.1 | 멀티모델 리서치(/orchestrate)·개발(/build)·회고(/council-retro) 오케스트레이터 + 프로바이더 셋업(/council-setup) · 루프 엔지니어링(상태 파일·평결 루프·통합 게이트·에스컬레이션·스킬 자기개선) |
 
 ## 업데이트 배포 (관리자)
 
