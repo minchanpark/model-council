@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0-beta.1 — 2026-07-19
+
+- **Host 일반화**: 메인 오케스트레이터를 Claude로 고정하지 않고 Codex/GPT, Claude, Antigravity, 기타 Host로 추상화했다.
+- **native/external 분리**: Host-native agent pool과 외부 CLI/MCP provider pool을 분리했다. same-vendor 제외는 외부 provider에만 적용되어 Codex Host의 Codex subagent, Claude Host의 Claude Agent는 계속 병렬 생성할 수 있다.
+- **CLI adapter runtime**: `scripts/council-cli-runner.mjs`와 Codex CLI, Claude Code CLI, Antigravity CLI adapter를 추가했다. probe, Host vendor별 route, read-only/workspace-write, model/effort, session resume, dry-run, 공통 JSON 결과를 지원한다.
+- **provider routing**: Codex Host는 외부 Claude Code·Antigravity, Claude Host는 외부 Codex·Antigravity를 기본 후보로 사용한다. 같은 vendor의 외부 CLI는 명시적 예외로만 허용하고 독립 vendor 수를 늘리지 않는다.
+- **스킬·프록시 갱신**: `/orchestrate`, `/build`, `/council-setup`, 범용 researcher/coder proxy와 config reference를 Host-neutral 구조로 개편했다.
+- **Codex 패키징**: 기존 `.claude-plugin`을 유지하면서 `.codex-plugin/plugin.json`을 추가했다. 별도 공통 코어 패키지는 만들지 않았다.
+- **제약 명시**: Antigravity CLI의 plain-text 출력, 제한적 자동 resume, 강제되지 않는 read-only를 경고와 문서에 반영했다.
+
 ## 0.6.1 — 2026-07-18
 
 - **입장 배정 (stance steering)**: 판단형 트랙의 듀얼 편성에서 리서처별 입장(찬성/반대/중립)을 오케스트레이터가 명시 배정 — 관점 수렴(같은 오답 동의)을 구조적으로 방지. 사실확인형 트랙은 배정 금지(근거 왜곡 방지). 같은 프로바이더 단독 편성 시 우선 적용. 배정표에 `입장` 열 추가, 브리프 "당신의 관점"에 입장 줄. critique 모드에 공격/스틸맨 분담 옵션. rubric에 판정 안전장치 추가(입장은 논거 생성 장치 — 판정은 논거의 질로만, 배정 입장과 반대로 기운 결론은 강한 신호). zen-mcp consensus의 검증된 패턴을 지시문으로 번안. 인라인 지시 항상 우선.

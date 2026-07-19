@@ -1,0 +1,42 @@
+{
+  "name": "model-council",
+  "version": "0.7.0-beta.1",
+  "description": "Host-native subagents와 외부 Codex·Claude Code·Antigravity CLI를 조합하는 범용 멀티에이전트 오케스트레이터.",
+  "author": {
+    "name": "NewDawn",
+    "email": "itisnewdawn@gmail.com",
+    "url": "https://github.com/minchanpark"
+  },
+  "homepage": "https://github.com/minchanpark/model-council",
+  "repository": "https://github.com/minchanpark/model-council",
+  "license": "MIT",
+  "keywords": [
+    "orchestrator",
+    "multi-agent",
+    "multi-model",
+    "codex",
+    "claude",
+    "antigravity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Model Council",
+    "shortDescription": "여러 에이전트와 CLI를 편성하는 모델 카운슬",
+    "longDescription": "현재 Host의 native subagent를 유지하면서 다른 vendor의 Codex, Claude Code, Antigravity CLI를 리서치·구현·교차 리뷰에 편성합니다.",
+    "developerName": "NewDawn",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Multi-agent orchestration",
+      "Research",
+      "Code implementation",
+      "Cross-review"
+    ],
+    "websiteURL": "https://github.com/minchanpark/model-council",
+    "defaultPrompt": [
+      "여러 모델로 이 주제를 교차 검증해줘.",
+      "다른 에이전트와 토론하고 이 기능을 구현해줘.",
+      "현재 Host와 외부 CLI 편성을 점검해줘."
+    ],
+    "brandColor": "#4F46E5"
+  }
+}

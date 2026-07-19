@@ -1,85 +1,89 @@
-# model-council
+# model-council 설계
 
-멀티모델 리서치·개발 오케스트레이터. 메인 오케스트레이터는 앱에서 선택한 **호스트 Claude**가 맡고, **Codex(ChatGPT OAuth)** 와 **Claude 서브 에이전트** 등이 병렬 작업을 수행한다. 서브 모델과 추론 강도는 설정·난이도에 따라 해석하며, 초기 기획 기준으로 심사·통합한다.
+## 1. 실행 모델
 
-## 구성
+model-council은 특정 메인 모델을 고정하지 않습니다.
 
-**리서치** (`/orchestrate`)
-- `skills/orchestrate` — PLAN → DISPATCH → REVIEW(평결표·기준 충족 기반 재질의 루프) → SYNTHESIZE + 모드(research/critique/consensus)
-- `agents/researcher-claude-{fast|balanced|deep|maximum}` — 지정 모델 + tier별 effort로 실행되는 Claude 독립 리서처
-- `agents/researcher-codex` — Codex 프록시 리서처 (read-only, 질문 단위 분할 호출)
+- **Host**: 현재 대화를 소유하는 GPT/Codex, Claude, Antigravity 또는 기타 agent. 계획, 심사, 통합을 책임집니다.
+- **Host-native agent**: Host가 자체 subagent/collaboration 기능으로 만드는 worker입니다. 같은 역할을 여러 개 병렬 생성할 수 있습니다.
+- **External provider**: 별도 CLI/MCP 세션으로 호출되는 Codex CLI, Claude Code CLI, Antigravity CLI 또는 사용자 정의 provider입니다.
 
-**개발** (`/build`)
-- `skills/build` — DEBATE-PLAN(오케스트레이터 ↔ Codex 동급 토론) → DECOMPOSE(난이도별 모델·effort 배정 + 파일 소유권 분할) → IMPLEMENT(Claude·Codex 코더 다중 병렬) → CROSS-REVIEW(교차 리뷰·수정 루프·통합)
-- `agents/coder-claude-{fast|balanced|deep|maximum}` — tier별 effort가 설정된 Claude 구현 코더
-- `agents/coder-codex` — Codex 구현 프록시 (workspace-write, 소유 범위 검수)
-- `agents/reviewer-claude-{fast|balanced|deep|maximum}` — tier별 effort가 설정된 Claude 교차 리뷰어
+Host-native와 External provider를 분리한 이유는 “같은 vendor의 외부 호출을 제외한다”는 규칙이 Host의 자체 subagent 기능까지 꺼버리지 않게 하기 위해서입니다.
 
-**회고** (`/council-retro`)
-- `skills/council-retro` — 누적된 council-state 파일(회의록)에서 반복 마찰을 채굴해 스킬 문서 편집안을 제안·스테이징(LOAD→HARVEST→MINE→PROPOSE→STAGE). SkillOpt 규율 번안(편집 예산·검증 게이트·기각 버퍼·느린 업데이트). **스킬 파일 직접 수정 금지 — 제안 원장(`council-retro-proposals.md`)만 작성, 채택은 사람+git.** 자기 완화 제안 자동 플래그. 양식: `references/proposal-template.md`
+| Host vendor | native pool | 기본 external pool |
+|---|---|---|
+| OpenAI | Codex native subagents | Anthropic, Google |
+| Anthropic | Claude native Agents | OpenAI, Google |
+| Google | 노출된 Antigravity native agents | OpenAI, Anthropic |
 
-**셋업** (`/council-setup`)
-- `skills/council-setup` — 프로바이더 연결 마법사: 사용 가능한 도구 스캔 → 사용자 선택 → 스모크 테스트 → `orchestrator.config.json` 레지스트리 저장. 미연결 프로바이더는 연결 방법 안내(설치·OAuth는 사용자 직접). 카탈로그: `references/known-providers.md`
-- `agents/researcher-proxy` · `agents/coder-proxy` — codex·claude 외 프로바이더용 범용 프록시 (레지스트리의 tools·arg_map으로 호출)
+같은 vendor의 외부 CLI를 명시적으로 허용할 수는 있지만 독립 교차검증 표를 추가하지는 않습니다.
 
-**공통**
-- `.mcp.json` — `codex mcp-server` 등록 (리서치·개발 공용, 서버 1개). 추가 프로바이더의 MCP는 사용자가 앱 설정에 등록하면 서브에이전트가 자동 상속
-- **상태 파일 (v0.5)** — 각 실행이 작업 폴더에 `council-state-{run}.md`를 남긴다(성공 기준·평결표·루프 로그·마찰 기록). 페이즈마다 재독·갱신하며 세션 기억과 충돌 시 파일이 우선. 끄기: `loops.state_file: false`
+## 2. 구성 요소
 
-안전 규칙: 리서치 경로의 Codex는 항상 read-only. 쓰기(workspace-write)는 `/build`의 coder-codex만 가능하며, `build.allow_codex_write: false`로 끌 수 있다.
+### 리서치 `/orchestrate`
 
-## 사전 준비 (1회)
+PLAN → DISPATCH → REVIEW → SYNTHESIZE를 수행합니다. 난이도가 높은 트랙은 서로 다른 vendor 둘을 우선하고, 외부 provider가 부족하면 별도 Host-native researcher로 보완합니다. 성공 기준, 블라인드 사전 평결, 기준 충족 기반 follow-up, 정체 감지와 에스컬레이션을 유지합니다.
+
+### 개발 `/build`
+
+DEBATE-PLAN → DECOMPOSE → IMPLEMENT → CROSS-REVIEW를 수행합니다. 계획 토론 상대는 `auto`일 때 Host와 다른 vendor를 고릅니다. 구현 writer는 겹치지 않는 파일 소유권과 worktree/사본을 사용하고, reviewer는 가능하면 구현 vendor와 다르게 배정합니다. green gate를 통과하지 못한 Critical 패키지는 자동 통합하지 않습니다.
+
+### 설정 `/council-setup`
+
+Host와 native agent capability를 먼저 감지하고 외부 CLI를 probe합니다. 두 pool을 분리한 상태로 쓰기 권한과 same-vendor 정책을 `orchestrator.config.json`에 병합합니다.
+
+### 회고 `/council-retro`
+
+누적 `council-state-*.md`에서 반복 마찰을 찾아 제안 원장에 스테이징합니다. skill 파일을 자동 수정하지 않으며 사람+git 검토를 유지합니다.
+
+## 3. CLI adapter runtime
+
+동봉 runner는 shell 문자열이 아닌 명시적 args 배열로 provider를 실행하고 결과를 공통 JSON으로 정규화합니다.
 
 ```bash
-npm i -g @openai/codex
-codex login        # ChatGPT 계정 OAuth
+node scripts/council-cli-runner.mjs probe
+node scripts/council-cli-runner.mjs route --host-vendor openai
+node scripts/council-cli-runner.mjs run --provider claude --role researcher --cwd "$PWD" --access read-only --tier deep
+node scripts/council-cli-runner.mjs continue --provider claude --session-id <id> --role reviewer --cwd "$PWD" --access read-only --tier deep
 ```
 
-## 사용법
+반환 핵심 필드:
 
-- **설치 후 첫 실행: "council setup 해줘"** — 연결된 프로바이더를 감지하고 편성을 설정 (건너뛰면 기본 claude+codex)
-- "orchestrate: 폐쇄형 SNS 시장성 리서치해줘"
-- "critique 모드로 이 IR 덱 공격해봐"
-- "consensus로: PIN의 첫 유료 고객은 누구여야 하나"
-- "build: 이슈 상태 워크플로(FR-06) 구현해줘" — Codex와 계획 토론 → 병렬 구현 → 교차 리뷰
-- "build인데 토론 없이 바로" → `max_debate_rounds: 0`
+- `status`: completed / failed / timeout
+- `sessionId`: 후속 호출에 사용할 ID, 없으면 null
+- `result`: provider 결과
+- `actual`: 실제 model / effort / access
+- `warnings`, `diagnostics`: 권한 한계, 종료 코드, stderr, 시간
 
-## 모델·effort 변경
+현재 adapter:
 
-작업 폴더 루트에 `orchestrator.config.json` 생성 (스키마: `skills/orchestrate/references/config-reference.md`):
+| adapter | structured | auto resume | read-only 강제 | write |
+|---|---:|---:|---:|---:|
+| Codex CLI | 예 | 예 | 예 | 예 |
+| Claude Code CLI | 예 | 예 | 예 | 예 |
+| Antigravity CLI | 아니오 | 제한적 | 아니오 | 예 |
 
-```json
-{
-  "providers": {
-    "claude": { "enabled": true, "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [] },
-    "codex":  { "enabled": true, "model_policy": "orchestrator", "model": null, "model_allowlist": [] }
-  },
-  "routing": {
-    "default_tier": "deep"
-  }
-}
-```
+Antigravity CLI는 plain text 출력이며 print mode session ID를 안정적으로 회수하지 못하면 새 세션에 이전 맥락을 포함해 이어갑니다.
 
-모델 정책: Claude 서브 에이전트는 기본적으로 호스트 모델을 `inherit`하며, 오케스트레이터가 검증된 모델 별칭·ID를 Agent 호출에 지정할 수 있다. Codex의 `model: null`은 Codex CLI 기본 모델을 뜻한다. 플러그인은 메인 오케스트레이터 모델을 바꾸지 않는다.
+## 4. agent definitions
 
-추론 정책: 오케스트레이터는 `fast / balanced / deep / maximum`의 공통 reasoning tier를 정하고 프로바이더별 effort로 해석한다. Codex는 호출별 effort를 전달한다. Claude는 native Agent 호출에 effort 인자가 없으므로 `fast=low`, `balanced=medium`, `deep=high`, `maximum=xhigh` frontmatter를 가진 역할별 프로필을 선택한다. 모델은 같은 Agent 호출의 model 인자로 별도 지정한다.
+- `researcher-claude-*`, `coder-claude-*`, `reviewer-claude-*`: Claude Host-native 호환 프로필
+- `researcher-codex`, `coder-codex`: 기존 Codex MCP 호환 경로
+- `researcher-proxy`, `coder-proxy`: CLI adapter와 사용자 정의 MCP 공통 프록시
 
-또는 요청에 인라인으로: "Codex 모델은 기본값, reasoning tier는 balanced", "Claude 서브 모델은 sonnet으로".
+Codex 등 다른 Host는 해당 Host의 native collaboration 기능에 동일 역할 브리프를 직접 전달합니다. Claude 전용 프로필은 호환 자산이지 공통 코어가 아닙니다.
 
-## 트러블슈팅
+## 5. 설정과 호환
 
-- **codex 도구가 안 보임**: GUI 앱은 PATH가 제한적이다. `.mcp.json`의 `"command": "codex"`를 `which codex` 결과의 절대경로(예: `/opt/homebrew/bin/codex`)로 바꿔 재설치하거나, 데스크탑 설정의 MCP 등록에서 절대경로를 사용.
-- **인증 오류**: 터미널에서 `codex login` 재실행.
-- **effort 값 오류**: 폴백 규칙의 단일 출처는 `skills/orchestrate/references/config-reference.md`다 — 요지: 같은 사다리의 한 단계 낮은 값으로 재시도, 안전한 매핑이 없으면 기본값 상속.
-- **codex 타임아웃**: MCP 호출당 약 180초 제한. 프록시가 질문당 분할 호출하도록 설계돼 있으나, 그래도 걸리면 effort를 낮추거나 질문을 좁힐 것.
-- **모델 버전 오류** ("requires a newer version of Codex"): `npm i -g @openai/codex@latest` 후 데스크탑 앱 완전 재시작.
+상세 스키마는 `skills/orchestrate/references/config-reference.md`가 단일 기준입니다. v0.6 이하의 `providers.claude`, `providers.codex`, `routing.tier_map`, `difficulty_matrix`, `codex_effort`, `claude_thinking`, `allow_codex_write`는 읽기 호환을 유지하고 저장 시 새 구조를 병합합니다.
 
-## 다른 모델 추가 (옵션)
+## 6. 패키징
 
-플러그인 수정 불필요. ① 해당 프로바이더의 CLI 설치·OAuth 로그인(사용자 직접) ② MCP를 앱에 등록(Cowork: 설정 > 커넥터 / Code: `claude mcp add`) ③ `/council-setup` 재실행 → 감지·스모크 테스트·레지스트리 등록까지 자동. 지원 후보와 주의사항은 `skills/council-setup/references/known-providers.md` 참조 (Gemini: CLI 세대교체 주의 / Qwen: 무료 쿼터 / DeepSeek: OAuth CLI 없음 — 불가).
+- `.claude-plugin`: 기존 Claude Code/Cowork 설치 경로
+- `.codex-plugin`: Codex plugin manifest
+- `skills/`: Host-neutral orchestration instructions
+- `agents/`: Claude profiles와 범용 proxy
+- `scripts/`: provider-neutral runner와 vendor adapter
+- `.mcp.json`: 기존 Codex MCP transport 호환
 
-## 제한
-
-- Claude Cowork·Claude Code에서 동작. claude.ai 웹 챗은 로컬 MCP·서브에이전트 미지원으로 불가.
-- 메인(오케스트레이터) 모델은 플러그인이 아니라 앱의 모델 선택기에서 정한다.
-- Claude native Agent는 effort를 호출 인자로 받지 않지만, 이 플러그인은 effort별 에이전트 프로필 선택으로 실행마다 추론 강도를 제어한다. `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 설정된 환경에서는 그 값이 프로필 frontmatter보다 우선한다.
+별도 “공통 코어 패키지”를 만들지 않고 현재 plugin 내부에서 Host와 provider 경계를 추상화했습니다.
