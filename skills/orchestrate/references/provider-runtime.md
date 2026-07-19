@@ -33,6 +33,8 @@ node scripts/council-cli-runner.mjs continue --provider <provider> --session-id 
 
 `run`과 `continue`의 prompt는 stdin으로 전달한다. Antigravity는 설치된 CLI가 stdin headless 입력을 지원하지 않아 runner 내부에서 shell 없이 인자 배열로 전달한다. `--dry-run`은 실제 provider 호출 없이 command shape와 권한을 검증한다.
 
+Host terminal이 stdin session을 지원하면 runner를 시작한 뒤 브리프를 stdin으로 보내고 EOF를 닫는다. 빈 prompt로 먼저 실행하지 않는다. 셸 heredoc은 Host sandbox가 허용하고 브리프 경계를 안전하게 고정할 수 있을 때만 사용한다.
+
 지원 역할: `researcher`, `architect`, `coder`, `reviewer`.
 
 지원 access:
@@ -42,6 +44,13 @@ node scripts/council-cli-runner.mjs continue --provider <provider> --session-id 
 - Antigravity의 `read-only`는 현재 CLI 1.0 계열에서 프롬프트 규율이며 강제 차단이 아니다. 이 경고가 있는 실행은 쓰기 위험이 없는 승인된 작업 폴더에서만 사용한다.
 
 runner 결과의 `status`, `sessionId`, `result`, `actual`, `warnings`, `diagnostics`를 state 파일에 기록한다. `status != completed`를 성공으로 처리하지 않는다.
+
+### Host sandbox와 외부 CLI 인증
+
+- version probe 성공은 OAuth 인증 성공을 보장하지 않는다.
+- 특히 macOS의 Codex sandbox가 Claude Code 등의 Keychain·인증 저장소를 읽지 못하면 실제 호출이 `Not logged in`으로 실패할 수 있다.
+- 플러그인이 Host sandbox를 자동으로 완화하거나 bypass 플래그를 추가해서는 안 된다. 사용자에게 인증 저장소 접근이 가능한 Host 권한으로 실행하거나 해당 CLI에 다시 로그인하도록 안내한다.
+- Host가 외부 CLI 인증을 읽을 수 있더라도 nested researcher·architect·reviewer 호출은 계속 runner의 `read-only`를 사용한다. Host 권한과 nested provider 권한을 같은 것으로 간주하지 않는다.
 
 ## 라우팅과 독립성
 

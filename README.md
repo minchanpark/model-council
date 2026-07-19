@@ -100,6 +100,7 @@ node scripts/council-cli-runner.mjs probe
 - 리서치·계획·리뷰는 read-only, 구현만 workspace-write입니다.
 - Codex CLI와 Claude Code CLI는 runner가 read-only를 기술적으로 제한합니다.
 - Antigravity CLI의 read-only는 현재 prompt+sandbox 수준이고 구조화 출력·자동 session ID 회수가 제한적입니다.
+- Host sandbox가 외부 CLI의 OAuth/Keychain 저장소를 읽지 못하면 version probe는 통과해도 실제 호출은 `Not logged in`으로 실패할 수 있습니다. 플러그인은 Host 권한을 자동 완화하지 않으며, Host 접근 권한과 nested worker의 `read-only`는 별도로 관리합니다.
 - 모델 ID는 사용자 지정·allowlist·현재 도구 확인값만 전달합니다.
 - 병렬 writer는 파일 소유권과 worktree/사본을 분리합니다.
 - 실행 중인 세션은 plugin 정의를 캐시할 수 있으므로 업데이트 뒤 앱/세션을 재시작합니다.

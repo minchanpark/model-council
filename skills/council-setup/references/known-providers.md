@@ -35,6 +35,7 @@ codex login
 - noninteractive: `claude -p --output-format json`; resume: session ID로 지원
 - model/effort: 호출별 지정 가능. 현재 effort 어휘는 low/medium/high/xhigh/max
 - access: read-only 호출은 plan mode와 Read/Grep/Glob/WebSearch/WebFetch allowlist, Write/Edit/Bash/NotebookEdit denylist를 함께 적용
+- 인증 주의: Host sandbox가 macOS Keychain·Claude 인증 저장소를 읽지 못하면 `claude --version`은 성공해도 실제 `-p` 호출은 `Not logged in`으로 실패할 수 있다. Host 권한을 자동 완화하지 말고 실제 스모크로 판정한다.
 - same-vendor: Anthropic Host에서는 외부 후보에서 기본 제외되지만 Claude native Agent는 계속 사용 가능
 
 ## antigravity-cli (Google)
