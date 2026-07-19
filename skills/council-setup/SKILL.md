@@ -1,86 +1,133 @@
 ---
 name: council-setup
 description: >-
-  model-council의 프로바이더(서브 에이전트로 쓸 외부 AI) 연결을 설정한다. 사용자가 "카운슬 셋업",
-  "council setup", "프로바이더 설정/연결/추가", "오케스트레이터 에이전트 설정", "어떤 모델 연결돼 있어?"
-  등을 요청하거나, 플러그인 설치 직후 첫 오케스트레이션 전에 트리거된다. 사용 가능한 도구를 스캔해
-  연결된 프로바이더를 감지하고, 사용자 선택을 받아 orchestrator.config.json 레지스트리에 저장하며,
-  미연결 프로바이더는 연결 방법을 안내한다.
+  model-council의 Host-native 서브에이전트와 외부 CLI/MCP provider 편성을 설정한다. 사용자가
+  "카운슬 셋업", "council setup", "프로바이더 설정/연결/추가", "어떤 모델 연결돼 있어?" 등을
+  요청하거나 플러그인 설치 직후 첫 오케스트레이션 전에 트리거된다. Host를 감지하고 Codex CLI,
+  Claude Code CLI, Antigravity CLI 등을 probe한 뒤 read-only 설정안을 채팅으로 제안한다.
 ---
 
-# Council Setup — 프로바이더 연결 마법사
+# Council Setup — Host·provider 연결 마법사
 
-당신은 설정 마법사다. 프로바이더를 **대신 설치하지 않는다** — 감지·검증·기록·안내만 한다. 재실행해도 안전해야 한다(기존 설정 병합, 삭제 금지).
+당신은 read-only 설정 마법사다. 인증정보를 받거나 로그인을 대신하지 않으며
+`orchestrator.config.json`이나 다른 파일을 생성·수정하지 않는다. 기존 설정은
+읽기만 하고, 변경안은 채팅으로 제안한다.
 
-## 1. SCAN — 감지
+## 1. SCAN — Host와 실행 수단 감지
 
-1. 작업 폴더 루트의 `orchestrator.config.json`을 읽는다 (없으면 신규 생성 예정으로 표시).
-2. 현재 세션에서 **자신이 호출할 수 있는 도구 목록**을 확인하고, `references/known-providers.md`의 감지 패턴과 대조해 후보를 분류한다:
-   - **연결됨**: 해당 프로바이더의 MCP 도구가 보임 (예: 이름에 `codex`가 포함된 도구)
-   - **미연결**: 카탈로그에 있으나 도구가 안 보임
-   - `claude`(native)는 항상 연결됨 — Claude 구독의 서브에이전트라 별도 연결이 없다.
-3. 카탈로그에 없는 낯선 AI 계열 MCP 도구가 보이면 "사용자 정의 후보"로 함께 표시한다.
+1. 작업 폴더 루트의 `orchestrator.config.json`을 읽는다. 없으면 세션 기본값 사용으로 표시한다.
+2. 현재 실행 표면을 `claude-code`, `claude-cowork`, `codex`, `other` 중 하나로, Host vendor를 `anthropic`, `openai`, `google`, `unknown` 중 하나로 판정한다. 불명확하면 둘 다 `auto`로 저장하고 현재 관찰값만 보고한다.
+3. Host가 native subagent/collaboration 기능을 제공하면 이를 **Host-native agent pool**로 별도 표시한다. 이 pool은 외부 CLI provider와 다른 계층이며 기본 `enabled: true`다.
+4. 플러그인 루트의 runner로 외부 CLI를 probe한다.
 
-## 2. ASK — 선택
+```bash
+node "<plugin-root>/scripts/council-cli-runner.mjs" probe
+node "<plugin-root>/scripts/council-cli-runner.mjs" route --host-vendor <판정한-vendor>
+```
 
-감지 결과를 표(프로바이더 | 상태 | 연결 방식 | 역할 가능 범위)로 보여주고 묻는다:
+5. 현재 세션에 추가 AI MCP 도구가 보이면 `type: "mcp"` 후보로 함께 표시한다. CLI 감지 기준과 제한은 `references/known-providers.md`를 따른다.
 
-- **연결된 프로바이더 중 무엇을 활성화할지** (복수 선택. Cowork에서는 선택지 UI, Claude Code에서는 텍스트로)
-- **미연결 프로바이더 중 연결 안내를 원하는 것**이 있는지 — 반드시 미연결 목록도 보여줘서 "이런 것도 붙일 수 있다"를 알린다
-- 활성화 대상의 **쓰기 권한**(build에서 코더로 쓸지, 리서치 전용일지)
-- 프로바이더별 **기본 모델**(`inherit`/`null` 권장)과, 확인된 경우에만 사용할 모델 별칭·ID
+## 2. ROUTE — 같은 vendor를 올바르게 분리
 
-기본 권장: claude + codex 활성화, 나머지는 사용자 선택.
+- 기본값 `exclude_host_vendor_from_external_providers: true`는 **외부 CLI/MCP provider만** 편성에서 제외한다.
+- Host-native subagent 생성은 항상 별도다. 예: Codex Host는 Codex native subagent를 여러 개 만들 수 있고, 동시에 외부 `claude-code-cli`, `antigravity-cli`를 사용할 수 있다.
+- 같은 vendor의 외부 CLI까지 쓰려면 사용자가 명시적으로 `allow_same_vendor_external_provider: true`를 선택해야 한다. 이 경우에도 Host-native와 외부 세션은 독립성 수준을 따로 기록한다.
+- 교차 검증은 가능하면 서로 다른 vendor를 사용한다. 다른 vendor가 없으면 별도 Host-native 세션으로 진행하되 `독립성 약화`를 보고한다.
 
-## 3. VERIFY — 스모크 테스트
+## 3. ASK — 편성 선택
 
-활성화하기로 한 각 MCP 프로바이더에 대해 1줄 스모크 테스트를 실행한다 (해당 도구로 "Reply with exactly: <프로바이더명> smoke OK" 전송, 읽기 전용 인자 사용 가능 시 적용). 결과:
+다음 두 그룹을 분리한 표를 보여준다.
 
-- 통과 → 레지스트리에 `enabled: true`
-- 실패 → 오류 원인 그대로 보고 (인증 만료/버전/타임아웃), `enabled: false`로 기록할지 확인하고, known-providers의 해결 힌트를 출력한다. **추측으로 통과 처리하지 않는다.**
+- Host: 표면/vendor/native agent 지원 여부와 활성 상태
+- External providers: provider/vendor/설치·인증 상태/transport/read-only 강제 여부/resume/구조화 출력/제한
 
-## 4. GUIDE — 미연결 안내
+그 다음 연결된 외부 provider 중 활성화할 항목과 검증된 기본 모델 ID를 확인한다. 모델을 확인할 수 없으면 `null`, allowlist는 `[]`로 둔다. 모든 provider의 `write`는 `false`이며 기본 권장은 Host-native 활성화 + Host와 다른 vendor의 설치된 CLI 활성화다.
 
-사용자가 원한 미연결 프로바이더마다 `references/known-providers.md`의 셋업 안내를 출력한다:
+## 4. VERIFY — 안전한 스모크 테스트
 
-- 터미널 명령(CLI 설치·OAuth 로그인)은 **사용자가 직접 실행** — 로그인은 본인 브라우저에서만 가능하다
-- MCP 등록 위치: Cowork = 설정 > 커넥터(로컬 MCP) 또는 데스크탑 config / Claude Code = `claude mcp add ...` 또는 프로젝트 `.mcp.json`
-- 마지막 줄: "연결을 마치면 `/council-setup`을 다시 실행하세요."
+활성화할 외부 provider마다 runner를 `role=researcher`, `access=read-only`로 호출해 `Reply with exactly: <provider> smoke OK`를 보낸다. 먼저 `--dry-run`으로 인자를 확인하고 실제 실행한다.
 
-계정 정보·API 키·비밀번호를 묻거나 받지 않는다.
+- 통과: `enabled: true`
+- 실패: 인증·버전·타임아웃 원문을 보고하고 `enabled: false`로 기록한다. 추측으로 통과 처리하지 않는다.
+- Antigravity는 현재 강제 read-only가 아니라 prompt+CLI sandbox 수준이며 구조화 출력이 아니다. 스모크를 통과해도 이 제한을 설정·요약에 남긴다.
 
-## 5. WRITE — 레지스트리 저장
+로그인이나 설치가 필요하면 `known-providers.md`의 명령만 안내하고 사용자가 직접 실행하게 한다. 계정 정보·API 키·비밀번호를 묻지 않는다.
 
-`orchestrator.config.json`에 병합 저장한다 (사용자의 기존 다른 키는 보존):
+## 5. PROPOSE — 설정안 반환
+
+다음 v0.8 research-only 구조를 기준으로 현재 세션에 적용할 설정안을 채팅으로
+반환한다. 기존 다른 키는 제안에서 보존하되 과거 build/write 키는 실행에
+사용하지 않는다. 파일 쓰기 도구를 호출하지 않는다.
 
 ```json
 {
+  "schema_version": 1,
+  "host": {
+    "surface": "auto",
+    "vendor": "auto",
+    "native_agents": {
+      "enabled": true,
+      "max_concurrency": 4,
+      "roles": ["researcher"]
+    }
+  },
   "providers": {
-    "claude": { "type": "native", "enabled": true, "write": true,
-                "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
-                "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
-                "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
-                "effort_ladder": ["low", "medium", "high", "xhigh"] },
-    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
-                "model_policy": "orchestrator", "model": null, "model_allowlist": [],
-                "tools": { "call": "codex", "reply": "codex-reply" },
-                "capabilities": { "per_call_model": true, "per_call_effort": true },
-                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] }
+    "codex-cli": {
+      "type": "external",
+      "vendor": "openai",
+      "adapter": "codex",
+      "transports": ["cli", "mcp"],
+      "enabled": true,
+      "write": false,
+      "model_policy": "orchestrator",
+      "model": null,
+      "model_allowlist": [],
+      "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"]
+    },
+    "claude-code-cli": {
+      "type": "external",
+      "vendor": "anthropic",
+      "adapter": "claude-code",
+      "transports": ["cli"],
+      "enabled": true,
+      "write": false,
+      "model_policy": "orchestrator",
+      "model": null,
+      "model_allowlist": [],
+      "effort_ladder": ["low", "medium", "high", "xhigh", "max"]
+    },
+    "antigravity-cli": {
+      "type": "external",
+      "vendor": "google",
+      "adapter": "antigravity",
+      "transports": ["cli"],
+      "enabled": true,
+      "write": false,
+      "model_policy": "orchestrator",
+      "model": null,
+      "model_allowlist": [],
+      "effort_ladder": []
+    }
   },
   "routing": {
     "default_tier": "deep",
-    "tier_map": {
-      "fast":     { "claude": "low",    "codex": "low" },
-      "balanced": { "claude": "medium", "codex": "medium" },
-      "deep":     { "claude": "high",   "codex": "high" },
-      "maximum":  { "claude": "xhigh",  "codex": "xhigh" }
-    }
+    "exclude_host_vendor_from_external_providers": true,
+    "allow_same_vendor_external_provider": false,
+    "count_host_native_as_independent_vendor": false
   }
 }
 ```
 
-새 프로바이더를 추가할 때는 known-providers.md의 항목(또는 사용자 정의 값)으로 `tools`·`arg_map`·`capabilities`·`effort_ladder`·`write`·`split`을 채운다. `model`과 `model_allowlist`는 사용자나 도구가 확인한 값만 기록하고, 확인되지 않았으면 각각 `null`, `[]`로 둔다. `routing.tier_map`에 열이 없으면 effort_ladder를 네 구간(fast→maximum)에 균등 매핑한 기본값을 제안해 추가한다. Claude native는 `per_call_effort: false`, `profile_effort: true`로 기록하고 `{role}-claude-{tier}` 프로필을 선택한다.
+구 `providers.claude` native 설정은 Host가 Claude일 때 `host.native_agents`로
+해석한다. 구 `providers.codex`는 `providers.codex-cli` 제안으로 변환하되 원본
+파일을 바꾸지 않는다. 상세 호환 규칙은
+`../orchestrate/references/config-reference.md`를 따른다.
 
-## 6. 마무리 요약
+## 6. 마무리
 
-최종 상태 표(프로바이더 | enabled | 역할: 리서치/코딩 | 기본 모델 | effort 방식: 호출/프로필/상속 | effort 사다리)와 함께: "이제 `/orchestrate` 또는 `/build`에서 이 편성이 사용됩니다. 프로바이더를 더 붙이려면 연결 후 `/council-setup`을 재실행하세요."
+최종 표에 Host-native와 External providers를 분리하고 각 provider의 `enabled`,
+역할, transport, 모델, effort, read-only 강제 여부를 표시한다. 이번 세션에
+적용할 routing과 파일 미변경 사실을 명시한다. `/orchestrate`에서 새 편성을
+사용하며, **Host 자신의 native subagent는 외부 same-vendor 제외와 무관하게
+계속 사용 가능**하다고 설명한다. model-council은 구현 권한을 제공하지 않으며
+개발은 document-driven-development를 사용한다고 안내한다.

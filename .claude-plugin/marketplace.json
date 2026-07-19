@@ -12,17 +12,19 @@
     {
       "name": "model-council",
       "source": "./",
-      "description": "멀티모델 리서치·개발 오케스트레이터 — 메인 오케스트레이터가 계획을 수립·토론하고 서브 에이전트들(Codex·Claude 코더/리서처)에게 병렬 작업을 지휘한 뒤, 초기 기획 기준으로 심사·통합해 최종 결과를 만든다.",
-      "version": "0.6.1",
+      "description": "Host-native researcher와 외부 Codex·Claude Code·Antigravity CLI를 조합하는 read-only 멀티모델 리서치 오케스트레이터.",
+      "version": "0.8.0",
       "author": {
         "name": "NewDawn"
       },
       "keywords": [
         "orchestrator",
         "multi-model",
+        "multi-agent",
         "research",
         "codex",
-        "claude"
+        "claude",
+        "antigravity"
       ]
     }
   ]

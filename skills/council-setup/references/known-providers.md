@@ -1,63 +1,108 @@
-# 알려진 프로바이더 카탈로그
+# 알려진 Host·provider 카탈로그
 
-"쉽게 연결 가능"의 기준: 구독 OAuth·계정 로그인·로컬 실행 중 하나로 인증되고(API 키 직접 관리 불필요), MCP/CLI로 호출 가능한 것. 각 항목의 정보는 시점에 따라 달라질 수 있으므로 스모크 테스트로 최종 확정한다.
+최종 상태는 항상 로컬 `probe`와 read-only 스모크 테스트로 판정한다. 아래 CLI 동작은 2026-07-19 기준이며 버전 변경 시 실제 `--help`가 우선한다.
 
-## claude (native) — 항상 사용 가능
-- 연결: 없음 (호스트의 Claude 구독. Agent 도구로 스폰)
-- 모델: 기본 `inherit`. 확인된 Claude 모델 별칭·ID는 호출별 model로 지정 가능
-- effort: Agent 호출 인자는 없지만 역할별 프로필의 frontmatter로 제어. fast=low / balanced=medium / deep=high / maximum=xhigh
-- capabilities: `per_call_model: true`, `per_call_effort: false`, `profile_effort: true`
-- agent_template: `{role}-claude-{tier}`. `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 있으면 프로필 effort보다 우선
-- write: true (coder-claude-* 프로필)
+## Host-native agent — 외부 provider가 아님
 
-## codex (OpenAI) — 플러그인 동봉
-- 감지 패턴: 도구 이름에 `codex`
-- 연결: ChatGPT 계정 OAuth. 터미널에서:
-  ```bash
-  npm i -g @openai/codex@latest
-  codex login
-  ```
-  MCP 서버는 플러그인 `.mcp.json`에 동봉(`codex mcp-server`) — 별도 등록 불필요. 도구가 안 보이면 앱 재시작, 그래도 안 되면 `.mcp.json`의 command를 `which codex` 절대경로로.
-- 기본 모델: null = Codex CLI 기본 모델. 특정 모델명은 확인 없이 하드코딩하지 않음
-- effort_ladder: minimal/low/medium/high/xhigh/max (모델별 상이). 특정 모델에서 확인된 `ultra` 등은 명시 설정으로만 추가
-- capabilities: `per_call_model: true`, `per_call_effort: true`
-- write: true (coder-codex, workspace-write) / split: true (호출당 ~180초 제한 → 질문·단계 분할)
-- 스모크: `codex` 도구, prompt "Reply with exactly: codex smoke OK", sandbox read-only
+- 감지: 현재 Host가 제공하는 Agent/Task/collaboration/subagent 기능
+- 역할: researcher
+- 연결: Host 로그인·구독을 그대로 사용하며 별도 CLI 설치가 없다.
+- 핵심 규칙: `exclude_host_vendor_from_external_providers`의 영향을 받지 않는다. Codex Host는 Codex native subagent를, Claude Host는 Claude Agent를 계속 여러 개 사용할 수 있다.
+- 독립성: Host와 같은 vendor이므로 다른 vendor의 교차검증 1표로 세지 않는다.
 
-## gemini (Google)
-- 감지 패턴: 도구 이름에 `gemini` 또는 `antigravity`/`agy`
-- 연결: Google 계정 OAuth CLI + 커뮤니티 MCP 래퍼. ⚠️ 주의: Gemini CLI는 2026-06 무료·Pro 사용자 대상 종료, 후속 Antigravity CLI(`agy`)로 세대교체 중 — 래퍼가 신·구 혼재하므로 연결 전 래퍼의 최신 지원 여부 확인 필요.
-- 안내: ① 해당 CLI 설치 후 Google 계정 로그인 ② 래퍼 MCP(예: gemini-mcp-tool 계열)를 Cowork 설정 > 커넥터 또는 `claude mcp add`로 등록 ③ /council-setup 재실행
-- effort_ladder: 래퍼별 상이 (미지정 시 effort 인자 생략) / write: false 권장 (검증 전)
+## codex-cli (OpenAI)
 
-## qwen (Alibaba)
-- 감지 패턴: 도구 이름에 `qwen`
-- 연결: Qwen Code CLI (Qwen 계정 OAuth, 무료 쿼터) + MCP 래퍼 등록
-- effort_ladder: 래퍼별 상이 / write: false 권장 (검증 전)
+- adapter: `codex`; 명령: `codex`
+- 감지: `codex --version`
+- 설치·로그인:
 
-## ollama (로컬)
-- 감지 패턴: 도구 이름에 `ollama`
-- 연결: 로컬 실행(인증 불필요) + Ollama MCP 서버 등록. 모델 품질은 로컬 모델에 의존 — easy 트랙 전용 권장
-- write: false
+```bash
+npm i -g @openai/codex@latest
+codex login
+```
 
-## 사용자 정의 프로바이더
-카탈로그에 없는 AI MCP 도구도 등록 가능. 레지스트리에 직접 기입:
+- noninteractive: `codex exec`; structured output: JSONL; resume: 지원
+- model/effort: 호출별 지정 가능. 모델 ID는 확인된 값만 사용
+- access: `read-only`를 sandbox로 강제. model-council은 `workspace-write`를 노출하지 않음
+- transport: CLI 기본. Host가 별도로 노출한 MCP는 read-only capability를 확인한 뒤 사용
+- same-vendor: OpenAI Host에서는 외부 후보에서 기본 제외되지만 Codex native subagent는 계속 사용 가능
+
+## claude-code-cli (Anthropic)
+
+- adapter: `claude-code`; 명령: `claude`
+- 감지: `claude --version`
+- 설치·로그인: Claude Code 공식 설치 후 `claude`에서 계정 로그인
+- noninteractive: `claude -p --output-format json`; resume: session ID로 지원
+- model/effort: 호출별 지정 가능. 현재 effort 어휘는 low/medium/high/xhigh/max
+- access: read-only 호출은 plan mode와 Read/Grep/Glob/WebSearch/WebFetch allowlist, Write/Edit/Bash/NotebookEdit denylist를 함께 적용
+- 인증 주의: Host sandbox가 macOS Keychain·Claude 인증 저장소를 읽지 못하면 `claude --version`은 성공해도 실제 `-p` 호출은 `Not logged in`으로 실패할 수 있다. Host 권한을 자동 완화하지 말고 실제 스모크로 판정한다.
+- same-vendor: Anthropic Host에서는 외부 후보에서 기본 제외되지만 Claude native Agent는 계속 사용 가능
+
+## antigravity-cli (Google)
+
+- adapter: `antigravity`; 명령: `agy`
+- 감지: `agy --version`
+- 설치·로그인: Antigravity CLI 설치 후 Google 계정으로 로그인
+- noninteractive: `agy --print`; model 지정 가능; 직접 effort tier 인자 없음
+- resume: CLI는 `--conversation <id>`를 지원하지만 print 출력에서 session ID를 안정적으로 회수하지 못하면 runner는 새 세션+이전 맥락 폴백을 사용한다.
+- output: 현재 구조화 JSON이 아닌 plain text
+- access: `--sandbox`를 사용하지만 read-only를 완전히 강제하지 못한다. 리서치는 승인된 작업 폴더에서만 실행하고 prompt-only read-only 경고를 남긴다.
+- same-vendor: Google Host에서는 외부 후보에서 기본 제외되며 native subagent와는 별도다.
+
+## 공통 확인 명령
+
+플러그인 루트에서:
+
+```bash
+node scripts/council-cli-runner.mjs probe
+node scripts/council-cli-runner.mjs route --host-vendor openai
+node scripts/council-cli-runner.mjs route --host-vendor anthropic
+node scripts/council-cli-runner.mjs route --host-vendor google
+```
+
+스모크 테스트는 먼저 `--dry-run`, 다음에 `role=researcher`, `access=read-only` 실제 호출 순서로 진행한다.
+
+## 사용자 정의 MCP provider
+
+현재 Host 세션에 호출 도구가 노출되어 있다면 다음처럼 등록할 수 있다.
+
 ```json
 {
   "providers": {
-    "myprovider": {
-      "type": "mcp", "enabled": true, "write": false,
-      "model_policy": "orchestrator", "model": null, "model_allowlist": [],
+    "my-provider": {
+      "type": "mcp",
+      "vendor": "my-vendor",
+      "enabled": true,
+      "write": false,
+      "model_policy": "inherit",
+      "model": null,
+      "model_allowlist": [],
       "tools": { "call": "<도구 이름>", "reply": "<후속 도구, 없으면 생략>" },
       "arg_map": { "model": "<모델 인자명>", "effort": "<effort 인자 경로>" },
-      "capabilities": { "per_call_model": true, "per_call_effort": true },
-      "effort_ladder": ["low", "medium", "high"]
+      "capabilities": {
+        "per_call_model": false,
+        "per_call_effort": false,
+        "resume": false,
+        "enforced_read_only": false
+      },
+      "effort_ladder": []
     }
   }
 }
 ```
-스모크 테스트 통과 후 사용. 인자 스키마를 모르면 arg_map을 비워두고 프록시가 prompt만으로 호출하게 한다.
 
-## 카탈로그 밖 (연결 비권장/불가)
-- DeepSeek: 구독 OAuth CLI 없음 — API 키 방식뿐이라 이 플러그인의 기준(키 없는 연결) 미충족.
-- Grok/Perplexity 등: API 키 또는 유료 전용 — 동일 사유로 기본 카탈로그 제외. 필요 시 사용자 정의로 등록은 가능하나 키 관리는 사용자 책임.
+도구 스키마를 확인한 값만 `arg_map`과 capability에 기록한다. 스모크 통과 전에는 `enabled: false`이며 `write: false`는 변경할 수 없다.
+
+## 사용자 정의 CLI adapter
+
+임의 명령 문자열을 설정에서 셸로 실행하지 않는다. `scripts/adapters/`에 다음 계약을 구현한 모듈을 추가하고 runner의 명시적 allowlist에 등록한다.
+
+- id, vendor, command, versionArgs, capabilities
+- `buildInvocation(...)`: shell 없는 args 배열과 stdin 사용 여부 반환
+- `parse(...)`: `sessionId`, `result` 정규화
+
+API 키·비밀번호를 config나 prompt에 넣지 않는다. 각 CLI의 공식 로그인 저장소를 사용한다.
+
+사용자 정의 adapter도 `researcher`와 `read-only`만 허용해야 한다. 개발 역할과
+쓰기 adapter는 model-council 범위가 아니며 `document-driven-development`에서
+관리한다.

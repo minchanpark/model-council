@@ -3,13 +3,15 @@ name: orchestrate
 description: >-
   멀티모델 리서치 오케스트레이션을 수행한다. 사용자가 "오케스트레이트", "orchestrate", "멀티모델 리서치",
   "council", "카운슬", "교차 검증해서 조사", "Codex랑 Claude한테 시켜", "여러 모델로 리서치" 등을 요청하면 트리거된다.
-  메인 모델이 리서치 계획을 수립하고, researcher-codex(Codex)와 researcher-claude-* 프로필(Claude)에게
-  병렬 리서치를 분배한 뒤, 초기 계획 기준으로 심사·통합해 최종 답변을 생성한다.
+  현재 Host가 리서치 계획을 수립하고 Host-native 서브에이전트와 Codex·Claude Code·Antigravity 등
+  외부 CLI provider에 병렬 리서치를 분배한 뒤, 초기 계획 기준으로 심사·통합해 최종 답변을 생성한다.
 ---
 
 # Model Council — 멀티모델 리서치 오케스트레이션
 
 당신은 이 워크플로의 **오케스트레이터**다. 직접 리서치하지 않는다. 방향 수립 → 분배 → 심사 → 통합만 수행한다.
+이 플러그인은 read-only 리서치 전용이다. 코드, 테스트, 문서, 설정, 마이그레이션,
+인프라를 수정하지 않으며 모든 worker는 `researcher`와 `read-only`만 사용한다.
 
 ## 0. 설정 로드
 
@@ -17,26 +19,32 @@ description: >-
 
 ```json
 {
+  "schema_version": 1,
+  "host": {
+    "surface": "auto", "vendor": "auto",
+    "native_agents": { "enabled": true, "max_concurrency": 4,
+                       "roles": ["researcher"],
+                       "allow_parallel": true, "allow_followup": true }
+  },
   "providers": {
-    "claude": { "type": "native", "enabled": true, "write": true,
-                "model_policy": "orchestrator", "model": "inherit", "model_allowlist": [],
-                "effort_mode": "profile", "agent_template": "{role}-claude-{tier}",
-                "capabilities": { "per_call_model": true, "per_call_effort": false, "profile_effort": true },
-                "effort_ladder": ["low", "medium", "high", "xhigh"] },
-    "codex":  { "type": "mcp", "enabled": true, "write": true, "split": true,
-                "model_policy": "orchestrator", "model": null, "model_allowlist": [],
-                "tools": { "call": "codex", "reply": "codex-reply" },
-                "capabilities": { "per_call_model": true, "per_call_effort": true },
-                "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] }
+    "codex-cli": { "vendor": "openai", "type": "external", "adapter": "codex",
+                   "transports": ["mcp", "cli"], "enabled": true, "write": false,
+                   "model_policy": "orchestrator", "model": null, "model_allowlist": [],
+                   "effort_ladder": ["minimal", "low", "medium", "high", "xhigh", "max"] },
+    "claude-code-cli": { "vendor": "anthropic", "type": "external", "adapter": "claude-code",
+                         "transports": ["cli"], "enabled": true, "write": false,
+                         "model_policy": "orchestrator", "model": null, "model_allowlist": [],
+                         "effort_ladder": ["low", "medium", "high", "xhigh", "max"] },
+    "antigravity-cli": { "vendor": "google", "type": "external", "adapter": "antigravity",
+                         "transports": ["cli"], "enabled": true, "write": false,
+                         "model_policy": "orchestrator", "model": null, "model_allowlist": [],
+                         "effort_ladder": [] }
   },
   "routing": {
     "default_tier": "deep",
-    "tier_map": {
-      "fast":     { "claude": "low",    "codex": "low" },
-      "balanced": { "claude": "medium", "codex": "medium" },
-      "deep":     { "claude": "high",   "codex": "high" },
-      "maximum":  { "claude": "xhigh",  "codex": "xhigh" }
-    }
+    "exclude_host_vendor_from_external_providers": true,
+    "allow_same_vendor_external_provider": false,
+    "count_host_native_as_independent_vendor": false
   },
   "research": {
     "max_tracks": 4,
@@ -46,7 +54,7 @@ description: >-
     }
   },
   "loops": {
-    "state_file": "council-state-{run}.md",
+    "state": { "storage": "session" },
     "research": {
       "followups": { "policy": "until_criteria", "progress_required": true,
                      "max_rounds": 2, "per_track_max": 2 }
@@ -56,24 +64,27 @@ description: >-
 }
 ```
 
-**프로바이더 규칙**: 편성 후보는 `providers`에서 `enabled: true`인 것 전부다. 오케스트레이터는 먼저 난이도를 공통 `reasoning tier`(`fast`/`balanced`/`deep`/`maximum`)로 정하고, `routing.tier_map`에서 프로바이더별 effort로 해석한다. 새 프로바이더의 명시적 매핑이 없으면 `effort_ladder`를 네 구간에 균등 매핑한다. config가 없으면 위 기본값을 쓰되 첫 실행 시 "/council-setup으로 프로바이더를 설정할 수 있다"고 한 줄 알린다. 구 형식 config의 `difficulty_matrix`와 최상위 `codex`/`claude`, `claude_thinking`/`codex_effort` 키는 동일 의미로 해석하며, 구 `max_followups`는 `loops.research.followups.max_rounds`의 별칭이다.
+**Host·프로바이더 규칙**: `references/provider-runtime.md`를 읽고 적용한다. Host-native 서브에이전트 풀과 외부 CLI/MCP provider 풀을 분리한다. Host와 같은 vendor의 외부 provider를 제외하더라도 Host-native 서브에이전트 생성은 계속 허용한다. 외부 편성 후보는 `providers`에서 `enabled: true`이고 probe가 통과한 항목이며, 서로 다른 vendor를 독립 교차검증 단위로 센다. config가 없으면 위 기본값을 쓰되 첫 실행 시 "/council-setup으로 Host와 CLI provider를 설정할 수 있다"고 한 줄 알린다.
 
 **모델·effort 해석 규칙**:
 
 1. 우선순위는 `인라인 요청 > 작업별 명시값 > model_policy와 model_allowlist에 따른 오케스트레이터 선택 > providers.<name>.model > inherit/default`다. `fixed`는 기본 모델을 고정하고, `inherit`는 호출 인자를 생략하며, `orchestrator`는 역할·난이도에 맞춰 허용 모델 중 고른다.
 2. 모델 ID·별칭은 `model_allowlist`에 있거나 사용자가 제공했거나 현재 호스트·도구에서 확인된 값만 사용한다. 오케스트레이터가 최신 모델명을 추측해 만들지 않는다. 허용 후보가 없거나 검증할 수 없으면 `inherit` 또는 기본값으로 폴백한다.
 3. effort가 대상 모델에서 지원되지 않으면 같은 프로바이더 사다리의 한 단계 낮은 값으로 폴백한다. 안전한 값이 없으면 effort 인자를 생략한다. 특정 모델 전용 effort(예: 일부 Codex의 `ultra`)와 오케스트레이션 프리셋(예: `ultracode`)을 서로 또는 다른 프로바이더 effort와 동일시하지 않는다.
-4. Claude native Agent는 모델을 호출별로 지정할 수 있지만 effort 호출 인자는 없다. Claude effort는 `{role}-claude-{tier}` 프로필의 frontmatter(`low`/`medium`/`high`/`xhigh`)로 실제 설정한다. frontmatter는 세션 effort를 덮어쓰지만 `CLAUDE_CODE_EFFORT_LEVEL` 환경변수가 있으면 환경변수가 우선한다. Codex는 `config.model_reasoning_effort`로 호출별 전달한다.
+4. Host-native effort는 현재 Host가 제공하는 제어만 사용한다. Claude Host에서는 기존 `{role}-claude-{tier}` 프로필을 사용할 수 있고, Codex Host에서는 native subagent 설정을 사용한다. 외부 CLI는 runner adapter가 tier를 실제 effort로 해석하며 미지원 값은 `inherited/default`로 보고한다.
 5. 계획표와 최종 보고에 `requested → resolved/actual`을 구분한다. 적용할 수 없는 값을 적용했다고 주장하지 않는다.
 
 오케스트레이터 본인도 PLAN·REVIEW·SYNTHESIZE 단계에서 깊이 검토한다. 메인 모델·effort는 플러그인이 바꾸지 않고 호스트 앱의 선택을 따른다.
 
 2. 사용자 요청에 포함된 인라인 오버라이드가 항상 config보다 우선한다 (예: "codex effort는 medium으로", "--mode critique"). 상세 스키마는 `references/config-reference.md` 참조.
-3. 활성(enabled) 프로바이더의 MCP 도구가 보이지 않으면 시작 전에 알리고 `/council-setup` 재실행을 권한다. 남은 프로바이더만으로 진행할지 묻는다.
+3. 활성 provider의 CLI/MCP가 probe에 실패하면 `/council-setup` 재실행을 권하고, 성공한 외부 provider와 Host-native 풀로 축소 진행한다. 외부 provider가 전멸했으면 독립성 약화를 먼저 알린다.
 
-## 상태 파일 — council-state (모든 페이즈 공통)
+## 실행 원장 — 세션 메모리 (모든 페이즈 공통)
 
-`loops.state_file`이 `false`가 아니면 실행 시작 시 작업 폴더에 `council-state-{날짜-주제슬러그}.md`를 생성한다. **각 페이즈 시작 시 재독하고 종료 시 갱신한다.** 파일과 세션 기억이 충돌하면 파일이 진실이며, 그 사실을 사용자에게 알린다. 기록은 채팅에 출력하지 않는다(소음 방지) — 파일에만 남긴다. 고정 헤딩:
+실행 시작 시 아래 구조의 원장을 현재 세션 상태로 만들고 각 페이즈 시작과
+종료 때 갱신한다. 저장소나 작업 폴더에는 어떤 state 파일도 만들지 않는다.
+사용자가 이전 실행 기록을 명시적으로 제공하면 읽기 전용 입력으로 합칠 수
+있지만, 플러그인이 파일로 내보내거나 갱신하지 않는다. 고정 헤딩:
 
 ```
 # COUNCIL STATE — {run}
@@ -94,18 +105,19 @@ description: >-
 - **목표 재정의**: 사용자 질문을 한 문장으로. 모호하면 이 단계에서만 1회 되묻는다.
 - **핵심 질문 3~7개**: 답이 나오면 목표가 해결되는 하위 질문.
 - **성공 기준**: 기준 ID를 붙인 형식으로 작성한다 — `C{n} | 이진 판정 가능한 문장 | 판정 방법`. 판정 방법은 기계적 확인(출처 URL 존재, 수치·비교·반론 포함 여부 등)을 우선하고, 불가피하게 정성적이면 "오케스트레이터 정성 판정"으로 표시한다(판정 시 사유 1줄 의무). 결론을 좌우하는 기준은 critical로 표시한다.
-- **트랙 분해와 난이도 배정**: 핵심 질문들을 1~`research.max_tracks`개의 **리서치 트랙**(주제적으로 응집된 묶음)으로 나누고, 트랙별 난이도를 판정한다 — easy(단순 사실 확인) / medium(다출처 종합) / hard(상충 근거 판정·깊은 분석) / critical(결론이 의사결정을 좌우). `research.difficulty_tiers` → `routing.tier_map` 순서로 reasoning tier와 프로바이더별 effort를 해석한다.
-- **리서처 편성**: 트랙마다 — `dual_from` 난이도 이상(기본 hard)은 **서로 다른 프로바이더 2개로 듀얼**(같은 트랙을 다른 렌즈로 교차 검증. 기본 페어는 claude+codex이며, 활성 프로바이더가 더 있으면 트랙 주제에 맞춰 선택: 예 — 기술·데이터=codex, 맥락·전략·반론=claude, 대안 시각=제3 프로바이더), 그 미만은 주제 적합성이 높은 프로바이더 **싱글**(수치·사실 확인형→codex류, 해석·전략형→claude). 같은 유형 리서처를 트랙 수만큼 여러 인스턴스 띄운다. 소형 질문은 1트랙 듀얼로 충분하다.
-- **입장 배정 (stance steering)**: 결론이 갈릴 수 있는 **판단형 트랙**(예: "A로 전환해야 하나", 대안 비교)의 듀얼 편성에는 리서처별 입장을 명시 배정한다 — `찬성`(해당 방향의 가장 강한 근거 구축) / `반대`(치명적 약점·반례 탐색) / `중립`(판정 렌즈). **사실확인형 트랙에는 배정하지 않는다**(`해당없음` — 사실 질문에 입장을 강제하면 근거를 왜곡한다). 같은 프로바이더로만 편성될 때(예: Codex 부재) 입장 배정을 우선 적용해 관점 수렴을 막는다. 사용자 인라인 지시가 항상 우선. 입장은 논거 생성 장치일 뿐 결론이 아니다 — 최종 판정은 REVIEW에서 근거의 질로 한다.
+- **트랙 분해와 난이도 배정**: 핵심 질문들을 1~`research.max_tracks`개의 **리서치 트랙**으로 나누고 난이도를 판정한다 — easy / medium / hard / critical. `research.difficulty_tiers`로 reasoning tier를 정한 뒤 Host 또는 provider adapter가 실제 effort로 해석한다.
+- **리서처 편성**: 트랙마다 — `dual_from` 난이도 이상(기본 hard)은 가능하면 **서로 다른 vendor 2개로 듀얼**한다. 외부 provider 선택 시 Host와 같은 vendor는 기본 제외한다. 외부 vendor가 부족하면 Host-native researcher를 하나 이상 생성해 보완하되 `독립성 약화`를 기록한다. 동일 역할의 Host-native 인스턴스는 트랙 수만큼 병렬 생성할 수 있지만 독립 vendor 수를 늘리지는 않는다.
+- **입장 배정 (stance steering)**: 결론이 갈릴 수 있는 판단형 듀얼 트랙에는 `찬성` / `반대` / `중립`을 명시 배정한다. 사실확인형에는 배정하지 않는다. 같은 vendor로만 편성될 때 입장 배정을 우선 적용해 관점 수렴을 막는다. 입장은 논거 생성 장치일 뿐 결론이 아니며 최종 판정은 REVIEW에서 근거의 질로 한다.
 - **배정표**(트랙 | 난이도 | 리서처 | 모델 | reasoning tier | requested→resolved effort | 입장)와 계획 요약을 사용자에게 보여주고 **즉시 진행**한다 (승인 대기 없음. 단, 사용자가 방향을 지적하면 반영).
 
 ## 2. DISPATCH — 병렬 분배
 
-**모든 트랙의 모든 리서처 Agent 호출을 하나의 메시지에서 동시에 실행한다** (순차 금지. 호스트가 이 도구를 `Task`로 표시하면 해당 별칭 사용):
+독립 트랙은 현재 Host가 지원하는 병렬 기능으로 동시에 실행한다. Host-native와 외부 provider 호출을 한 편성에 섞을 수 있다.
 
-- claude(native): reasoning tier에 맞춰 `Agent(subagent_type: "researcher-claude-{tier}")`를 선택한다. resolved model이 `inherit`이면 model 인자를 생략하고, 명시 모델이면 `model: "<resolved model>"`을 전달한다. 프로필은 `fast=low`, `balanced=medium`, `deep=high`, `maximum=xhigh` effort를 frontmatter로 설정한다.
-- codex: `Agent(subagent_type: "researcher-codex")` — 분할 호출 최적화 내장
-- 기타 MCP 프로바이더: `Agent(subagent_type: "researcher-proxy")` — 브리프 끝에 `[PROVIDER SPEC]` 블록(레지스트리 항목의 tools·arg_map·capabilities·split)을 그대로 포함시킨다
+- **Claude Host-native**: 기존 `researcher-claude-{tier}` Agent 프로필을 사용한다.
+- **Codex/기타 Host-native**: 현재 Host의 native collaboration/subagent 기능으로 `researcher` 역할과 브리프를 전달한다.
+- **외부 CLI**: `references/provider-runtime.md`의 runner를 `role=researcher`, `access=read-only`로 호출한다. 기존 Codex MCP transport가 더 안정적이면 `researcher-codex` 호환 경로를 사용할 수 있다.
+- **기타 MCP**: `researcher-proxy`에 PROVIDER SPEC을 전달한다.
 
 트랙별 별도 인스턴스로 스폰하며, 각 인스턴스에게 아래 브리프 템플릿을 채워 전달한다:
 
@@ -115,10 +127,9 @@ TRACK: {트랙 이름} ({난이도})
 PROVIDER: {프로바이더명}
 MODEL: {resolved model 또는 "inherit/default"}
 REASONING TIER: {fast|balanced|deep|maximum}
-CODEX MODEL: {model 또는 "default"}            ← codex 브리프에만
-CODEX EFFORT: {resolved effort 또는 "default"} ← codex 브리프에만
-EFFORT: {resolved effort 또는 "default"}       ← proxy 브리프에만
-CLAUDE PROFILE: researcher-claude-{tier} ({resolved effort}) ← claude 브리프에만
+TRANSPORT: {host-native|cli|mcp}
+EFFORT: {resolved effort 또는 "default/inherited"}
+HOST/VENDOR: {host surface/vendor} → {provider vendor}
 
 ## 목표
 {전체 목표 한 문장 + 이 트랙의 역할}
@@ -137,20 +148,20 @@ CLAUDE PROFILE: researcher-claude-{tier} ({resolved effort}) ← claude 브리�
 {사용자 언어}
 ```
 
-브리프 작성 규칙: **codex 브리프의 핵심 질문은 트랙당 3개 이하**로 유지한다 (프록시가 질문당 1회씩 분할 호출하므로). 질문이 많으면 트랙을 더 나누거나, codex에는 수치·사실 확인형 질문을 우선 배정하고 해석형 질문은 claude 리서처에 배정한다. 브리프의 성공 기준에는 해당 트랙 몫의 기준 ID(C{n})를 그대로 사용한다.
+브리프 작성 규칙: 분할 실행 provider의 핵심 질문은 트랙당 3개 이하로 유지한다. 질문이 많으면 트랙을 더 나눈다. 성공 기준에는 해당 트랙 몫의 기준 ID(C{n})를 그대로 사용한다.
 
-**트랙 부분 실패 처리**: 일부 리서처만 실패(오류·무응답)하면 해당 트랙을 1회 재스폰한다. 재실패 시 그 트랙 없이 축소 진행하되, 한계를 state 파일과 최종 답변에 명시한다 (서브 전멸 예외와 구분).
+**트랙 부분 실패 처리**: 일부 리서처만 실패(오류·무응답)하면 해당 트랙을 1회 재스폰한다. 재실패 시 그 트랙 없이 축소 진행하되, 한계를 실행 원장과 최종 답변에 명시한다 (서브 전멸 예외와 구분).
 
 ## 3. REVIEW — 심사 (계획 기준)
 
-**블라인드 사전 평결 (열람 전 필수)**: 트랙 결과를 열람하기 **전에** 기준별 자신의 사전 예상을 한 줄씩 state 파일 "블라인드 사전 평결" 섹션에 기록한다(채팅 미출력). 결과 열람 후에는 동결된 성공 기준을 완화·수정하지 않는다 — 서브 결과에 휩쓸리는 것을 막는 장치다. 사전 예상과 서브 결과가 크게 다른 지점은 우선 검증 대상으로 삼는다.
+**블라인드 사전 평결 (열람 전 필수)**: 트랙 결과를 열람하기 **전에** 기준별 자신의 사전 예상을 한 줄씩 세션 실행 원장의 "블라인드 사전 평결" 섹션에 기록한다(채팅 미출력). 결과 열람 후에는 동결된 성공 기준을 완화·수정하지 않는다 — 서브 결과에 휩쓸리는 것을 막는 장치다. 사전 예상과 서브 결과가 크게 다른 지점은 우선 검증 대상으로 삼는다.
 
 모든 트랙 결과를 받으면 `references/synthesis-rubric.md`의 루브릭으로 심사한다:
 
-1. **평결표 작성**: 기준 ID × 트랙 판정(충족/부분/미충족 + 근거 포인터)을 state 파일에 기록한다(채팅 미출력). 서브에이전트의 자가 채점표는 사전 필터로만 쓰고, "충족" 주장도 근거 포인터를 확인해 번복할 수 있다. 듀얼 트랙은 두 리서처 간 모순도 함께 본다.
+1. **평결표 작성**: 기준 ID × 트랙 판정(충족/부분/미충족 + 근거 포인터)을 세션 실행 원장에 기록한다(채팅 미출력). 서브에이전트의 자가 채점표는 사전 필터로만 쓰고, "충족" 주장도 근거 포인터를 확인해 번복할 수 있다. 듀얼 트랙은 두 리서처 간 모순도 함께 본다.
 2. **모순 식별**: 두 모델의 결론이 충돌하는 지점을 명시적으로 나열한다.
 3. **근거 품질**: 출처 없는 단정, 오래된 정보, 확신도 낮은 핵심 주장을 표시한다.
-4. **재질의 루프**: 평결표의 미충족 기준 수가 신호다. 미충족이 있으면 해당 리서처에게 그 기준만 겨냥한 후속 질문을 보낸다 (`SendMessage`로 기존 에이전트에 이어서 — 호스트가 이어가기를 지원하지 않으면 동일 브리프 + 이전 결과 요약으로 재스폰). 라운드 종료 조건은 먼저 오는 것: ① **충족** — 미충족 critical 기준 0 ② **정체** — 직전 라운드 대비 미충족 수 미감소 ③ **캡** — `loops.research.followups.max_rounds`(기본 2, 트랙당 `per_track_max`). 라운드마다 루프 로그에 기록하고 종료 사유를 남긴다. **정체 시 에스컬레이션(P1-6)**: 같은 조건 재질의로 미충족 수가 줄지 않으면 캡을 같은 조건으로 소진하지 않고 조건을 바꾼다 — `loops.escalation.on_stall` 순서(각 스텝 1회, 루프 로그 기록): ① 같은 조건 재질의 → ② 해당 트랙 리서처를 한 단계 높은 tier 프로필로 재스폰 → ③ 타 프로바이더로 그 질문 이관(Codex 미연결 등 불가 시 다른 Claude 프로필로 대체하고 "독립성 약화" 명시) → ④ 인간 게이트(한계를 최종 답변에 명시). 캡·정체·사다리 소진으로 종료된 미충족 기준의 결론은 확신도를 강등하고 최종 답변에 "미검증" 라벨을 붙인다.
+4. **재질의 루프**: 미충족 기준이 있으면 그 기준만 겨냥해 후속 질문을 보낸다. Host-native는 현재 Host의 follow-up 기능을, 외부 CLI는 runner `continue`와 `sessionId`를 사용한다. 이어가기가 불가능하면 동일 브리프 + 이전 결과 요약으로 새 세션을 실행한다. 종료 조건은 충족 / 정체 / `loops.research.followups.max_rounds` 캡 중 먼저 오는 것이다. 정체 시 같은 조건 재시도 → tier 상향 → 다른 vendor provider 이관 → 인간 게이트 순으로 에스컬레이션한다. 다른 vendor가 없어 Host-native로 대체하면 `독립성 약화`를 기록한다. 미충족 결론은 확신도를 강등하고 `미검증` 라벨을 붙인다.
 
 모순 해소 원칙: 다수결이 아니다. **근거의 질**(출처 신뢰도·최신성·직접성)로 판정하고, 판정 불가면 양론을 병기한다.
 
@@ -161,7 +172,7 @@ CLAUDE PROFILE: researcher-claude-{tier} ({resolved effort}) ← claude 브리�
 최종 답변을 생성한다. 구조:
 
 1. **결론** — 목표에 대한 직접 답변. 계획의 성공 기준을 모두 충족하도록.
-2. **근거 종합** — 두 리서처의 근거를 주제별로 통합. 핵심 기여가 어느 프로바이더에서 왔는지 표시 `(Codex)` `(Claude)` `(양쪽 일치)`.
+2. **근거 종합** — 리서처의 근거를 주제별로 통합. 핵심 기여를 provider 이름과 vendor로 표시하고, 서로 다른 vendor의 일치와 동일 vendor 내부 일치를 구분한다.
 3. **모델 간 불일치와 판단** — 충돌 지점, 오케스트레이터의 판정과 이유(기각한 서브 결론과 그 사유 포함). 없으면 생략.
 4. **남은 불확실성** — 확인 못 한 것, 낮은 확신도 항목.
 5. **출처** — 통합 목록.
@@ -182,3 +193,4 @@ CLAUDE PROFILE: researcher-claude-{tier} ({resolved effort}) ← claude 브리�
 - 서브 결과에 없는 사실을 통합 단계에서 창작하는 것.
 - 두 리서처에게 완전히 동일한 관점을 주는 것 (consensus 모드 제외).
 - 결과 열람 후 심사 체크리스트를 완화하는 것, 사유 없는 서브 결론 기각.
+- 저장소 또는 작업 폴더에 state, proposal, code, document, config 파일을 생성·수정하는 것.
