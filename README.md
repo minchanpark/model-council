@@ -40,6 +40,10 @@ model-council은 코드, 테스트, 마이그레이션, 인프라를 수정하�
 /plugin install model-council@newdawn-plugins
 ```
 
+Claude 플러그인은 Codex MCP를 read-only 기본값으로 함께 등록합니다. Codex CLI를
+설치하고 `codex login`을 완료한 뒤 Claude를 다시 시작해야 `codex` 도구가
+표시됩니다.
+
 Cowork에서는 설정 → 기능(Capabilities) → 플러그인 → 마켓플레이스 추가에서
 저장소 URL을 등록합니다.
 

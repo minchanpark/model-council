@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +24,21 @@ function assert(condition, message) {
 }
 
 assert(!existsSync(path.join(pluginRoot, "skills", "build")), "build skill directory still exists");
-assert(!existsSync(path.join(pluginRoot, ".mcp.json")), "plugin-scoped writable MCP surface still exists");
+const mcpConfig = JSON.parse(readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
+const codexMcp = mcpConfig.mcpServers?.codex;
+assert(codexMcp?.command === "codex", "Claude plugin Codex MCP command is missing");
+assert(codexMcp.args?.[0] === "mcp-server", "Claude plugin Codex MCP server is missing");
+assert(
+  codexMcp.args.includes('approval_policy="never"')
+    && codexMcp.args.includes('sandbox_mode="read-only"'),
+  "Claude plugin Codex MCP defaults are not read-only",
+);
+const codexResearcher = readFileSync(path.join(pluginRoot, "agents", "researcher-codex.md"), "utf8");
+assert(
+  codexResearcher.includes('sandbox: "read-only"')
+    && codexResearcher.includes('approval-policy: "never"'),
+  "Codex MCP researcher does not enforce read-only calls",
+);
 const agentFiles = readdirSync(path.join(pluginRoot, "agents"));
 assert(
   !agentFiles.some((name) => name.startsWith("coder-") || name.startsWith("reviewer-")),

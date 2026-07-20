@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 — 2026-07-20
+
+- **Claude Codex MCP 복구**: Claude Code/Cowork 플러그인이 Codex researcher를
+  다시 호출할 수 있도록 `.mcp.json`의 `codex mcp-server` 등록을 복원했다.
+- **read-only 기본값**: MCP 서버를 `approval_policy=never`,
+  `sandbox_mode=read-only`로 시작하고 self-test에서 manifest와 researcher 호출
+  규칙을 함께 검증한다.
+
 ## 0.8.0 — 2026-07-19
 
 - **research-only 책임 분리**: `/build`, coder, reviewer agent를 제거하고

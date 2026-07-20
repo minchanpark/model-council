@@ -1,6 +1,6 @@
 {
   "name": "model-council",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Host-native researcher와 외부 Codex·Claude Code·Antigravity CLI를 조합하는 read-only 멀티모델 리서치 오케스트레이터.",
   "author": {
     "name": "NewDawn"

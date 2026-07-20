@@ -67,6 +67,7 @@ v0.7 이하의 build, coder/reviewer, `write: true`, `workspace-write` 설정은
 ## 7. 패키징
 
 - `.claude-plugin`: Claude Code/Cowork marketplace
+- `.mcp.json`: Claude Host에 read-only 기본값의 Codex MCP 등록
 - `.codex-plugin`: Codex plugin manifest
 - `.agents/plugins/marketplace.json`: Codex GitHub marketplace entry
 - `skills/`: Host-neutral research workflow
